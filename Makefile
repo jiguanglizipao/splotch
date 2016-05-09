@@ -17,11 +17,11 @@ OPT += -DLONGIDS
 
 #--------------------------------------- Switch on MPI
 OPT += -DUSE_MPI
-#OPT += -DUSE_MPIIO
+OPT += -DUSE_MPIIO
 
 #--------------------------------------- CUDA options
-#OPT += -DCUDA
-#OPT += -DHYPERQ
+OPT += -DCUDA
+OPT += -DHYPERQ
 
 #--------------------------------------- OpenCL options
 #OPT += -DOPENCL
@@ -40,9 +40,9 @@ OPT += -DUSE_MPI
 #OPT += -DVS
 
 #--------------------------------------- Select target Computer
-SYSTYPE="generic"
+#SYSTYPE="generic"
 #SYSTYPE="mac"
-#SYSTYPE="Linux-cluster"
+SYSTYPE="Linux-cluster"
 #SYSTYPE="DAINT"
 #SYSTYPE="GSTAR"
 #SYSTYPE="SuperMuc"
@@ -70,13 +70,13 @@ OMP      = -fopenmp
 SUP_INCL = -I. -Icxxsupport -Ic_utils -Ivectorclass
 
 # optimization and warning flags (g++)
-OPTIMIZE =  -pedantic -Wno-long-long -Wfatal-errors -Wextra -Wall -Wstrict-aliasing=2 -Wundef -Wshadow -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -std=c++11 -march=native
+OPTIMIZE = -std=c++11 -march=native -fpermissive#-pedantic -Wno-long-long -Wfatal-errors -Wextra -Wall -Wstrict-aliasing=2 -Wundef -Wshadow -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -std=c++11 -march=native
 #-Wno-newline-eof -g
 #-Wold-style-cast -std=c++11
 
 ifeq (USE_MPIIO,$(findstring USE_MPIIO,$(OPT)))
- SUP_INCL += -Impiio-1.0/include/
- LIB_MPIIO = -Lmpiio-1.0/lib -lpartition
+ SUP_INCL += -I/home/sc/ssd/jiguanglizipao/mpiio/include/
+ LIB_MPIIO = -L/home/sc/ssd/jiguanglizipao/mpiio/lib -lpartition
 endif
 
 
