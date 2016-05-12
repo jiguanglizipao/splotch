@@ -163,10 +163,10 @@ int main (int argc, const char **argv)
   int nTasksNode = 1 ; //number of processes per node (=1 default configuration)
   if (nDevNode > 0)
     {
+    nTasksNode = params.find<int>("tasks_per_node",1); //number of processes per node
 #ifdef HYPERQ
     // all processes in the same node share one GPU
     mydevID = 0;
-    nTasksNode = params.find<int>("tasks_per_node",1); //number of processes per node
     nTasksDev = nTasksNode;
     if (master) cout << "HyperQ enabled" << endl;
 #else

@@ -21,7 +21,7 @@ OPT += -DUSE_MPIIO
 
 #--------------------------------------- CUDA options
 OPT += -DCUDA
-OPT += -DHYPERQ
+#OPT += -DHYPERQ
 
 #--------------------------------------- OpenCL options
 #OPT += -DOPENCL
@@ -59,18 +59,19 @@ SYSTYPE="Linux-cluster"
 
 # Set compiler executables to commonly used names, may be altered below!
 ifeq (USE_MPI,$(findstring USE_MPI,$(OPT)))
- CC       = mpic++
+ CC       = mpiicpc
 else
- CC       = g++
+ CC       = icpc
 endif
 
 # OpenMP compiler switch
-OMP      = -fopenmp
+OMP      = -qopenmp
 
 SUP_INCL = -I. -Icxxsupport -Ic_utils -Ivectorclass
 
 # optimization and warning flags (g++)
-OPTIMIZE = -std=c++11 -march=native -fpermissive#-pedantic -Wno-long-long -Wfatal-errors -Wextra -Wall -Wstrict-aliasing=2 -Wundef -Wshadow -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -std=c++11 -march=native
+CXX11 = -std=c++11
+OPTIMIZE = -march=native -fpermissive -pedantic #-Wno-long-long -Wfatal-errors -Wextra -Wall -Wstrict-aliasing=2 -Wundef -Wshadow -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -std=c++11 -march=native
 #-Wno-newline-eof -g
 #-Wold-style-cast -std=c++11
 
@@ -135,17 +136,17 @@ endif
 
 ifeq ($(SYSTYPE),"Linux-cluster")
   ifeq (USE_MPI,$(findstring USE_MPI,$(OPT)))
-   CC  =  mpiCC -g
+   CC  =  mpiicpc -g
   else
-   CC  = g++
+   CC  = icpc
   endif
-  OPTIMIZE += -O2 
-  OMP = -fopenmp
+  OPTIMIZE += -g -Ofast 
+  OMP = -qopenmp
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
-  CUDA_HOME = /usr/local/cuda/
+  CUDA_HOME = /usr/local/cuda
   NVCC = nvcc
-  NVCCARCH = -arch=sm_30
-  NVCCFLAGS = -g  $(NVCCARCH) -dc -use_fast_math -std=c++11
+  NVCCARCH = -arch=sm_37
+  NVCCFLAGS = -g -ccbin icpc $(NVCCARCH) -dc -use_fast_math #-std=c++11
   LIB_OPT  =  -L$(CUDA_HOME)/lib64 -lcudart
   SUP_INCL += -I$(CUDA_HOME)/include
   endif
@@ -415,7 +416,7 @@ endif
 
 INCL   = */*.h Makefile
 
-CPPFLAGS = $(OPTIONS) $(SUP_INCL) $(HDF5_INCL) $(OMP) $(PREVIEWER_OPTS)
+CPPFLAGS = $(OPTIONS) $(CXX11) $(SUP_INCL) $(HDF5_INCL) $(OMP) $(PREVIEWER_OPTS)
 
 CUFLAGS = $(OPTIONS) $(SUP_INCL) $(OMP)
 
