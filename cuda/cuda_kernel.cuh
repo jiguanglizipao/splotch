@@ -31,7 +31,13 @@ __global__ void k_renderC3(int nC3, int *index, cu_particle_sim *part, cu_color 
 #endif
 #else
 __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types);
+#ifdef ENABLE_RENDER_POS
+__global__ void k_render(int nP, int *pos, cu_particle_sim *part, cu_color *pic);
+__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum);
+__global__ void k_getpos(int nP, int *sum, int *pos);
+#else
 __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic);
+#endif
 #endif
 
 // check for non-active and big particles to remove from the device

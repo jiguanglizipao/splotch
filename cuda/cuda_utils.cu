@@ -126,6 +126,26 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
   }
   cudaMemset(pgv->d_pd,0,size);
 
+#ifdef ENABLE_RENDER_POS
+  //sum vector
+  size = nP * sizeof(int);
+  error = cudaMalloc((void**) &pgv->sum, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "Device Memory: sum vector allocation error!" << endl;
+   return 1;
+  }
+
+  //pos vector
+  size = nP * sizeof(int);
+  error = cudaMalloc((void**) &pgv->pos, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "Device Memory: pos vector allocation error!" << endl;
+   return 1;
+  }
+#endif
+
   // Image
   size = pgv->policy->GetImageSize();
   error = cudaMalloc((void**) &pgv->d_pic, size); 
@@ -300,12 +320,32 @@ void cu_render(int nP, cu_gpu_vars* pgv)
   // Blocks 512 wide
   // Grid wide enough for each thread to have a particle
   dim3 dimGrid, dimBlock;
-  pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+  pgv->policy->GetDimsBlockGrid_OnlyGrid(nP, &dimGrid, &dimBlock);
 
   //printf("Grid dim: %i, Block dim: %i\n", dimGrid.x, dimBlock.x);
   // Pass in pgv->d_pd (particle data) pgv->d_pic (final picture)
+#ifdef ENABLE_RENDER_POS
+  k_render<<<dimGrid,dimBlock>>>(nP, pgv->pos, pgv->d_pd, pgv->d_pic);
+#else
   k_render<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->d_pic);
+#endif
 }
+
+#ifdef ENABLE_RENDER_POS
+void cu_getsum(int nP, cu_gpu_vars* pgv)
+{
+  dim3 dimGrid, dimBlock;
+  pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+  k_getsum<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->sum);
+}
+
+void cu_getpos(int nP, cu_gpu_vars* pgv)
+{
+  dim3 dimGrid, dimBlock;
+  pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+  k_getpos<<<dimGrid,dimBlock>>>(nP, pgv->sum, pgv->pos);
+}
+#endif
 
 #else
 // --------------------------------------
@@ -376,6 +416,11 @@ void cu_end(cu_gpu_vars* pgv)
 {
   CLEAR_MEM((pgv->d_pd));
   CLEAR_MEM((pgv->d_pic));
+
+#ifdef ENABLE_RENDER_POS
+  CLEAR_MEM((pgv->sum));
+  CLEAR_MEM((pgv->pos));
+#endif
 
 #ifndef CUDA_FULL_ATOMICS
   CLEAR_MEM((pgv->d_active));

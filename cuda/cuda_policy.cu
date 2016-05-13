@@ -87,3 +87,12 @@ void CuPolicy::GetDimsBlockGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
     if (nBlock > m_gridSize)
       cout << "Error: dim grid = " << nBlock << "too large!" << endl;
   }
+
+void CuPolicy::GetDimsBlockGrid_OnlyGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
+  {
+    *dimBlock = dim3(32);
+    int nBlock = n;
+    *dimGrid =dim3(nBlock); 
+    if (nBlock > m_gridSize)
+      cout << "Error: dim grid = " << nBlock << "too large!" << endl;
+  }

@@ -55,6 +55,7 @@ class CuPolicy
     int GetBlockSize();
     int GetMaxGridSize();
     void GetDimsBlockGrid(int n, dim3 *dimGrid, dim3 *dimBlock);
+    void GetDimsBlockGrid_OnlyGrid(int n, dim3 *dimGrid, dim3 *dimBlock);
   };
 
 #endif //CUPOLICY_H

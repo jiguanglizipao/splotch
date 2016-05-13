@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cuda.h>
+#include <thrust/device_vector.h>
 
 #include "cxxsupport/paramfile.h"
 #include "cxxsupport/lsconstants.h"
@@ -118,6 +119,10 @@ struct cu_gpu_vars
   int                 colormap_size;
   int                 colormap_ptypes;
 
+#ifdef ENABLE_RENDER_POS
+  int *sum, *pos;
+#endif
+
   // Implementation specific
 #ifndef CUDA_FULL_ATOMICS
 #ifndef CUDA_ATOMIC_TILE_UPDATE
@@ -151,6 +156,10 @@ void      cu_add_images(int res, cu_gpu_vars* pgv);
 #else
 int cu_process(int nP, cu_gpu_vars* pgv);
 void cu_render(int nP, cu_gpu_vars* pgv);
+#ifdef ENABLE_RENDER_POS
+void cu_getsum(int nP, cu_gpu_vars* pgv);
+void cu_getpos(int nP, cu_gpu_vars* pgv);
+#endif
 #endif
 
 void      cu_end(cu_gpu_vars* pgv);

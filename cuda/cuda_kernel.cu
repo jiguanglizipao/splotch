@@ -577,12 +577,40 @@ __global__ void k_add_images(int n, cu_color *pic, cu_color *pic1, cu_color *pic
 // --------------------------------------
 // Render for full atomic implementation
 // --------------------------------------
+
+#ifdef ENABLE_RENDER_POS
+__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum)
+{
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nP)return;
+  sum[idx] = part[idx].active;
+}
+
+__global__ void k_getpos(int nP, int *sum, int *pos)
+{
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nP)return;
+  if ((!idx && sum[idx]) || (sum[idx] == sum[idx-1]+1))
+      pos[sum[idx]-1] = idx;
+}
+
+__global__ void k_render(int nP, int *pos, cu_particle_sim *part, cu_color *pic)
+{
+  // Get index, double check its not out of bounds 
+  // (launch parameters mean it shouldnt be...)
+  int idx = blockIdx.x;
+  //int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nP) return;
+  idx = pos[idx];
+#else
 __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic)
 {
   // Get index, double check its not out of bounds 
   // (launch parameters mean it shouldnt be...)
-  int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >=nP) return;
+  int idx = blockIdx.x;
+  //int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nP) return;
+#endif
 
   cu_particle_sim p = part[idx];
 
@@ -615,7 +643,8 @@ __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic)
           maxy2=min(maxy,int(p.y+dy+1));
       float pre2 = __expf(stp*dxsq);
       // For each pixel on y
-      for(int y = miny2; y < maxy2; ++y)
+      for(int y = miny2+threadIdx.x; y < maxy2; y+=blockDim.x)
+      //for(int y = miny2; y < maxy2; ++y)
       {
           // Work out y dist from centre  
           float dysq = (y - p.y) * (y - p.y);

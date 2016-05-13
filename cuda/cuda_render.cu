@@ -280,7 +280,19 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
 
   tstack_push("CUDA Rendering");
   
+#ifdef ENABLE_RENDER_POS
+  cu_getsum(nParticle, gv);
+  thrust::device_ptr<int> sum_ptr(gv->sum);
+  thrust::inclusive_scan(sum_ptr, sum_ptr+nParticle, sum_ptr);
+  int posnum;
+  cudaMemcpy(&posnum, gv->sum+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
+  cu_getpos(posnum, gv);
+   
+  cu_render(posnum, gv);
+  printf("%d %d\n", posnum, nParticle);
+#else
   cu_render(nParticle, gv);
+#endif
   cudaDeviceSynchronize();
   tstack_pop("CUDA Rendering");
 
