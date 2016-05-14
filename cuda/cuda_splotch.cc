@@ -27,6 +27,7 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
 {
   tstack_push("CUDA");
   tstack_push("Device setup");
+  cudaSetDevice (mydevID); // initialize cuda runtime
   long int nP = particle.size();
 
   // Fill our output image with black
