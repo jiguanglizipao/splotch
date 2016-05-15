@@ -90,7 +90,7 @@ void CuPolicy::GetDimsBlockGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
 
 void CuPolicy::GetDimsBlockGrid_OnlyGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
   {
-    *dimBlock = dim3(32);
+    *dimBlock = dim3(4, 16);
     int nBlock = n;
     *dimGrid =dim3(nBlock); 
     if (nBlock > m_gridSize)

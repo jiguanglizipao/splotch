@@ -140,7 +140,7 @@ ifeq ($(SYSTYPE),"Linux-cluster")
   else
    CC  = icpc
   endif
-  OPTIMIZE += -g -Ofast 
+  OPTIMIZE += -g -Ofast -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS 
   OMP = -qopenmp
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
   CUDA_HOME = /usr/local/cuda

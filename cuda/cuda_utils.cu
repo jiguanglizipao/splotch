@@ -135,6 +135,7 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
    cout << "Device Memory: sum vector allocation error!" << endl;
    return 1;
   }
+  cudaMemset(pgv->sum,0,size);
 
   //pos vector
   size = nP * sizeof(int);
@@ -144,6 +145,7 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
    cout << "Device Memory: pos vector allocation error!" << endl;
    return 1;
   }
+  cudaMemset(pgv->pos,0,size);
 #endif
 
   // Image
@@ -454,7 +456,7 @@ long int cu_get_chunk_particle_count(cu_gpu_vars* pgv, int nTasksDev, size_t psi
 
    long int arrayParticleSize = gMemSize/nTasksDev - nIm*ImSize - 2*tiles - spareMem - colormap_size;
    long int len = (long int) (arrayParticleSize/((psize+2*sizeof(int))*pfactor)); 
-   long int maxlen = (long int)pgv->policy->GetMaxGridSize() * (long int)pgv->policy->GetBlockSize();
+   long int maxlen = (long int)pgv->policy->GetMaxGridSize();
 
    if (len > maxlen) len = maxlen;
    return len;

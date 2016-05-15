@@ -633,7 +633,8 @@ __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic)
 
 
     // For each pixel on x
-    for(int x = minx; x < maxx; ++x)
+    //for(int x = minx; x < maxx; ++x)
+    for(int x = minx+threadIdx.x; x < maxx; x+=blockDim.x)
     {
       
       // Work out x dist from centre and new yminmax 
@@ -643,7 +644,7 @@ __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic)
           maxy2=min(maxy,int(p.y+dy+1));
       float pre2 = __expf(stp*dxsq);
       // For each pixel on y
-      for(int y = miny2+threadIdx.x; y < maxy2; y+=blockDim.x)
+      for(int y = miny2+threadIdx.y; y < maxy2; y+=blockDim.y)
       //for(int y = miny2; y < maxy2; ++y)
       {
           // Work out y dist from centre  
