@@ -87,26 +87,12 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
     int startP = 0;
     int nPR = 0;
 
-    // Copy data particle to device memory
-    endP = startP + len;
-    if (endP > nP) endP = nP;
-    tstack_push("Data copy");
-    cu_copy_particles_to_device((cu_particle_sim *) &(particle[startP]), endP-startP, &gv);
-    tstack_pop("Data copy");
-
     // Loop over chunks of particles as big as we can fit in dev mem
-    while(startP < nP)
+    while(endP < nP)
     {
+      // Set range and draw first chunk
       endP = startP + len;
       if (endP > nP) endP = nP;
-      // Set range and draw first chunk
-      tstack_push("Data copy");
-      cudaStreamSynchronize(gv.stream2);
-      swap(gv.d_pd, gv.d_pd_tmp);
-      int endPt = endP + len;
-      if (endPt > nP) endPt = nP;
-      cu_copy_particles_to_device((cu_particle_sim *) &(particle[endP]), endPt-endP, &gv);
-      tstack_pop("Data copy");
       nPR += cu_draw_chunk(mydevID, (cu_particle_sim *) &(particle[startP]), endP-startP, Pic_host, &gv, a_eq_e, grayabsorb, xres, yres, doLogs);
       
 #ifndef CUDA_FULL_ATOMICS

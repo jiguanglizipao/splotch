@@ -115,19 +115,6 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
 {
   cudaError_t error;
   //cudaSetDevice (devID); // initialize cuda runtime
-
-  error = cudaStreamCreate(&pgv->stream);
-  if (error != cudaSuccess) 
-  {
-   cout << "Device Memory: stream creation error!" << endl;
-   return 1;
-  }
-  error = cudaStreamCreate(&pgv->stream2);
-  if (error != cudaSuccess) 
-  {
-   cout << "Device Memory: stream creation error!" << endl;
-   return 1;
-  }
  
   // particle vector  
   size_t size = nP * sizeof(cu_particle_sim);
@@ -138,13 +125,6 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
    return 1;
   }
   cudaMemset(pgv->d_pd,0,size);
-  error = cudaMalloc((void**) &pgv->d_pd_tmp, size);
-  if (error != cudaSuccess) 
-  {
-   cout << "Device Memory: particle data allocation error!" << endl;
-   return 1;
-  }
-  cudaMemset(pgv->d_pd_tmp,0,size);
 
 #ifdef ENABLE_RENDER_POS
   //sum vector
@@ -296,8 +276,7 @@ int cu_copy_particles_to_device(cu_particle_sim* h_pd, unsigned int n, cu_gpu_va
 {
   cudaError_t error;
   size_t size = n*sizeof(cu_particle_sim);
-  error = cudaMemcpyAsync(pgv->d_pd_tmp, h_pd, size, cudaMemcpyHostToDevice, pgv->stream2);
-  //error = cudaMemcpy(pgv->d_pd_tmp, h_pd, size, cudaMemcpyHostToDevice);
+  error = cudaMemcpy(pgv->d_pd, h_pd, size, cudaMemcpyHostToDevice);
   if (error != cudaSuccess)
   {
    cout << "Device Memory: particle data copy error!" << endl;
@@ -315,7 +294,7 @@ int cu_range(int nP, cu_gpu_vars* pgv)
   pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
   
   // Ranging process
-  k_range<<<dimGrid, dimBlock, 0, pgv->stream>>>(nP, pgv->d_pd);
+  k_range<<<dimGrid, dimBlock>>>(nP, pgv->d_pd);
 
   return 0;
 }
@@ -333,7 +312,7 @@ int cu_process(int n, cu_gpu_vars* pgv)
   pgv->policy->GetDimsBlockGrid(n, &dimGrid, &dimBlock);
 
   cudaFuncSetCacheConfig(k_process, cudaFuncCachePreferL1);
-  k_process<<<dimGrid,dimBlock, 0, pgv->stream>>>(pgv->d_pd, n, pgv->colormap_size, pgv->colormap_ptypes);
+  k_process<<<dimGrid,dimBlock>>>(pgv->d_pd, n, pgv->colormap_size, pgv->colormap_ptypes);
  
   return 0;
 }
@@ -348,9 +327,9 @@ void cu_render(int nP, cu_gpu_vars* pgv)
   //printf("Grid dim: %i, Block dim: %i\n", dimGrid.x, dimBlock.x);
   // Pass in pgv->d_pd (particle data) pgv->d_pic (final picture)
 #ifdef ENABLE_RENDER_POS
-  k_render<<<dimGrid,dimBlock, 0, pgv->stream>>>(nP, pgv->pos, pgv->d_pd, pgv->d_pic);
+  k_render<<<dimGrid,dimBlock>>>(nP, pgv->pos, pgv->d_pd, pgv->d_pic);
 #else
-  k_render<<<dimGrid,dimBlock, 0, pgv->stream>>>(nP, pgv->d_pd, pgv->d_pic);
+  k_render<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->d_pic);
 #endif
 }
 
@@ -359,14 +338,14 @@ void cu_getsum(int nP, cu_gpu_vars* pgv)
 {
   dim3 dimGrid, dimBlock;
   pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
-  k_getsum<<<dimGrid,dimBlock, 0, pgv->stream>>>(nP, pgv->d_pd, pgv->sum);
+  k_getsum<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->sum);
 }
 
 void cu_getpos(int nP, cu_gpu_vars* pgv)
 {
   dim3 dimGrid, dimBlock;
   pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
-  k_getpos<<<dimGrid,dimBlock, 0, pgv->stream>>>(nP, pgv->sum, pgv->pos);
+  k_getpos<<<dimGrid,dimBlock>>>(nP, pgv->sum, pgv->pos);
 }
 #endif
 
@@ -382,7 +361,7 @@ int cu_process (int n, cu_gpu_vars* pgv, int tile_sidex, int tile_sidey, int wid
   pgv->policy->GetDimsBlockGrid(n, &dimGrid, &dimBlock);
 
   cudaFuncSetCacheConfig(k_process, cudaFuncCachePreferL1);
-  k_process<<<dimGrid,dimBlock, 0, pgv->stream>>>(pgv->d_pd, pgv->d_active, n, pgv->colormap_size, pgv->colormap_ptypes, tile_sidex, tile_sidey, width, nxtiles, nytiles);
+  k_process<<<dimGrid,dimBlock>>>(pgv->d_pd, pgv->d_active, n, pgv->colormap_size, pgv->colormap_ptypes, tile_sidex, tile_sidey, width, nxtiles, nytiles);
  
   return 0;
 }
@@ -395,7 +374,7 @@ void cu_add_images(int res, cu_gpu_vars* pgv)
   pgv->policy->GetDimsBlockGrid(res, &dimGrid, &dimBlock);
 
   cudaFuncSetCacheConfig(k_add_images, cudaFuncCachePreferL1);
-  k_add_images<<<dimGrid,dimBlock, 0, pgv->stream>>>(res, pgv->d_pic, pgv->d_pic1, pgv->d_pic2, pgv->d_pic3);
+  k_add_images<<<dimGrid,dimBlock>>>(res, pgv->d_pic, pgv->d_pic1, pgv->d_pic2, pgv->d_pic3);
 }
 #endif
 
@@ -407,7 +386,7 @@ void cu_renderC2(int nP, int grid, int block, bool a_eq_e, float grayabsorb, cu_
   size_t SharedMem = (tile_sidex+2*width)*(tile_sidey+2*width)*sizeof(cu_color);
 
   cudaFuncSetCacheConfig(k_renderC2, cudaFuncCachePreferShared);
-  k_renderC2<<<dimGrid, dimBlock, SharedMem, pgv->stream>>>(nP, pgv->d_pd, pgv->d_tileID, pgv->d_tiles, pgv->d_pic,
+  k_renderC2<<<dimGrid, dimBlock, SharedMem>>>(nP, pgv->d_pd, pgv->d_tileID, pgv->d_tiles, pgv->d_pic,
   pgv->d_pic1, pgv->d_pic2, pgv->d_pic3, tile_sidex, tile_sidey, width, nytiles);
 }
 
@@ -416,7 +395,7 @@ void cu_indexC3(int nP, int nC3, cu_gpu_vars* pgv)
   dim3 dimGrid, dimBlock;
   pgv->policy->GetDimsBlockGrid(nC3, &dimGrid, &dimBlock);
  
-  k_indexC3<<<dimGrid, dimBlock, 0, pgv->stream>>>(nC3, pgv->d_pd+nP-nC3, pgv->d_index);
+  k_indexC3<<<dimGrid, dimBlock>>>(nC3, pgv->d_pd+nP-nC3, pgv->d_index);
 }
 
 void cu_renderC3(int nP, int nC3, int res, cu_gpu_vars* pgv)
@@ -429,7 +408,7 @@ void cu_renderC3(int nP, int nC3, int res, cu_gpu_vars* pgv)
   {
     cudaThreadSynchronize();
     pgv->policy->GetDimsBlockGrid(nC3, &dimGrid, &dimBlock);
-    k_renderC3<<<dimGrid,dimBlock, 0, pgv->stream>>>(nC3, pgv->d_index, pgv->d_pd+nP-nC3, pgv->d_pic);
+    k_renderC3<<<dimGrid,dimBlock>>>(nC3, pgv->d_index, pgv->d_pd+nP-nC3, pgv->d_pic);
   }
 }
 
@@ -437,10 +416,7 @@ void cu_renderC3(int nP, int nC3, int res, cu_gpu_vars* pgv)
 
 void cu_end(cu_gpu_vars* pgv)
 {
-  cudaStreamDestroy(pgv->stream);
-  cudaStreamDestroy(pgv->stream2);
   CLEAR_MEM((pgv->d_pd));
-  CLEAR_MEM((pgv->d_pd_tmp));
   CLEAR_MEM((pgv->d_pic));
 
 #ifdef ENABLE_RENDER_POS
@@ -483,7 +459,7 @@ long int cu_get_chunk_particle_count(cu_gpu_vars* pgv, int nTasksDev, size_t psi
    long int maxlen = (long int)pgv->policy->GetMaxGridSize();
 
    if (len > maxlen) len = maxlen;
-   return len/2;
+   return len;
 }
 
 
