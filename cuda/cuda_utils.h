@@ -114,10 +114,11 @@ struct cu_gpu_vars
 {
   // Core vars
   CuPolicy            *policy;
-  cu_particle_sim     *d_pd;             // Device ptr to device particle data
+  cu_particle_sim     *d_pd, *d_pd_tmp; // Device ptr to device particle data
   cu_color            *d_pic;
   int                 colormap_size;
   int                 colormap_ptypes;
+  cudaStream_t        stream, stream2;
 
 #ifdef ENABLE_RENDER_POS
   int *sum, *pos;
