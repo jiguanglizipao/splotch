@@ -22,6 +22,7 @@
 
 #include "cuda/cuda_utils.h"
 #include "cuda/cuda_kernel.cuh"
+#include "thrust/device_vector.h"
 
 using namespace std;
 
@@ -139,6 +140,27 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
 
   //pos vector
   size = nP * sizeof(int);
+  error = cudaMalloc((void**) &pgv->pos, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "Device Memory: pos vector allocation error!" << endl;
+   return 1;
+  }
+  cudaMemset(pgv->pos,0,size);
+#endif
+
+#ifdef ENABLE_RENDER_SM
+  //sum vector
+  size = nP * sizeof(int);
+  error = cudaMalloc((void**) &pgv->sum, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "Device Memory: sum vector allocation error!" << endl;
+   return 1;
+  }
+  cudaMemset(pgv->sum,0,size);
+  //pos vector
+  size = nP * sizeof(cu_pos);
   error = cudaMalloc((void**) &pgv->pos, size);
   if (error != cudaSuccess) 
   {
@@ -317,6 +339,7 @@ int cu_process(int n, cu_gpu_vars* pgv)
   return 0;
 }
 
+#ifndef ENABLE_RENDER_SM
 void cu_render(int nP, cu_gpu_vars* pgv)
 {
   // Blocks 512 wide
@@ -332,6 +355,7 @@ void cu_render(int nP, cu_gpu_vars* pgv)
   k_render<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->d_pic);
 #endif
 }
+#endif
 
 #ifdef ENABLE_RENDER_POS
 void cu_getsum(int nP, cu_gpu_vars* pgv)
@@ -346,6 +370,34 @@ void cu_getpos(int nP, cu_gpu_vars* pgv)
   dim3 dimGrid, dimBlock;
   pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
   k_getpos<<<dimGrid,dimBlock>>>(nP, pgv->sum, pgv->pos);
+}
+#endif
+
+#ifdef ENABLE_RENDER_SM
+void cu_getsum(int nP, cu_gpu_vars* pgv, int sx, int sy, int ex, int ey)
+{
+  dim3 dimGrid, dimBlock;
+  pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+  k_getsum<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->sum, sx, sy, ex, ey);
+}
+
+void cu_getpos(int nP, cu_gpu_vars* pgv, int sx, int sy, int ex, int ey)
+{
+  dim3 dimGrid, dimBlock;
+  pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+  k_getpos<<<dimGrid,dimBlock>>>(nP, pgv->sum, pgv->pos, sx, sy, ex, ey);
+}
+
+void cu_render(int nP, cu_gpu_vars* pgv)
+{
+  // Blocks 512 wide
+  // Grid wide enough for each thread to have a particle
+  dim3 dimGrid, dimBlock;
+  pgv->policy->GetDimsBlockGrid_SM(nP, &dimGrid, &dimBlock);
+
+  //printf("Grid dim: %i, Block dim: %i\n", dimGrid.x, dimBlock.x);
+  // Pass in pgv->d_pd (particle data) pgv->d_pic (final picture)
+  k_render<<<dimGrid,dimBlock>>>(nP, pgv->pos, pgv->d_pd, pgv->d_pic);
 }
 #endif
 
@@ -420,6 +472,11 @@ void cu_end(cu_gpu_vars* pgv)
   CLEAR_MEM((pgv->d_pic));
 
 #ifdef ENABLE_RENDER_POS
+  CLEAR_MEM((pgv->sum));
+  CLEAR_MEM((pgv->pos));
+#endif
+
+#ifdef ENABLE_RENDER_SM
   CLEAR_MEM((pgv->sum));
   CLEAR_MEM((pgv->pos));
 #endif

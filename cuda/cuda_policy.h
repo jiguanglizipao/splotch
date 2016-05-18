@@ -44,6 +44,9 @@ class CuPolicy
     int m_gridSize, p_blockSize;
     pair <int,int> res, tile_size;
     int boundary_width, x_num_tiles, y_num_tiles, blockx, blocky;
+#ifdef ENABLE_RENDER_SM
+    int image_sx, image_sy;
+#endif
     size_t gmsize;
   public:
     CuPolicy(int xres, int yres, paramfile &params);
@@ -52,6 +55,15 @@ class CuPolicy
     int GetNumTiles();
     size_t GetGMemSize();
     size_t GetImageSize();
+#ifdef ENABLE_RENDER_SM
+    int GetImageSizeX();
+    int GetImageSizeY();
+    int GetImageSplitX();
+    int GetImageSplitY();
+    int GetImageSplitNumX();
+    int GetImageSplitNumY();
+    void CuPolicy::GetDimsBlockGrid_SM(int n, dim3 *dimGrid, dim3 *dimBlock);
+#endif
     int GetBlockSize();
     int GetMaxGridSize();
     void GetDimsBlockGrid(int n, dim3 *dimGrid, dim3 *dimBlock);

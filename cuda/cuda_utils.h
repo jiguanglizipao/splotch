@@ -109,6 +109,13 @@ struct cu_colormap_info
   int                 ptypes;
 };
 
+#ifdef ENABLE_RENDER_SM
+struct cu_pos
+{
+    size_t pos, startx, starty, endx, endy;
+};
+#endif
+
 // Variables used by each gpu
 struct cu_gpu_vars 
 {
@@ -121,6 +128,11 @@ struct cu_gpu_vars
 
 #ifdef ENABLE_RENDER_POS
   int *sum, *pos;
+#endif
+
+#ifdef ENABLE_RENDER_SM
+  int *sum;
+  cu_pos *pos;
 #endif
 
   // Implementation specific
@@ -159,6 +171,10 @@ void cu_render(int nP, cu_gpu_vars* pgv);
 #ifdef ENABLE_RENDER_POS
 void cu_getsum(int nP, cu_gpu_vars* pgv);
 void cu_getpos(int nP, cu_gpu_vars* pgv);
+#endif
+#ifdef ENABLE_RENDER_SM
+void cu_getsum(int nP, cu_gpu_vars* pgv, int sx, int sy, int ex, int ey);
+void cu_getpos(int nP, cu_gpu_vars* pgv, int sx, int sy, int ex, int ey);
 #endif
 #endif
 
