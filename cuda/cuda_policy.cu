@@ -28,6 +28,9 @@ CuPolicy::CuPolicy(int xres, int yres, paramfile &params)
     boundary_width = params.find<int>("tile_boundary_width", 8); // width of the boundary around the image tile = max particle radius
     tile_size.first = params.find<int>("tile_x-side", 8);  // x side dimension of the image tile, in terms of pixels
     tile_size.second = params.find<int>("tile_y-side", tile_size.first); // y side dimension of the image tile, in terms of pixels
+    p_blockSize = params.find<int>("p_block_size", 512); 
+    blockx = params.find<int>("blockx_size", 4); 
+    blocky = params.find<int>("blocky_size", 16);
     x_num_tiles = xres/tile_size.first;
     if (xres%tile_size.first) x_num_tiles++;
     y_num_tiles = yres/tile_size.second;
@@ -36,7 +39,7 @@ CuPolicy::CuPolicy(int xres, int yres, paramfile &params)
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, 0);
     //p_blockSize = deviceProp.maxThreadsPerBlock;
-    p_blockSize = 512;
+    //p_blockSize = 512;
     m_gridSize = deviceProp.maxGridSize[0];
     gmsize = deviceProp.totalGlobalMem;
   }

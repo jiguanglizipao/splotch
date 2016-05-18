@@ -43,7 +43,7 @@ class CuPolicy
   private:
     int m_gridSize, p_blockSize;
     pair <int,int> res, tile_size;
-    int boundary_width, x_num_tiles, y_num_tiles;
+    int boundary_width, x_num_tiles, y_num_tiles, blockx, blocky;
     size_t gmsize;
   public:
     CuPolicy(int xres, int yres, paramfile &params);
