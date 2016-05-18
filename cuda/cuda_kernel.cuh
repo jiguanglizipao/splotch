@@ -35,10 +35,6 @@ __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types);
 __global__ void k_render(int nP, int *pos, cu_particle_sim *part, cu_color *pic);
 __global__ void k_getsum(int nP, cu_particle_sim *part, int *sum);
 __global__ void k_getpos(int nP, int *sum, int *pos);
-#elif defined ENABLE_RENDER_SM
-__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int sx, int sy, int ex, int ey);
-__global__ void k_getpos(int nP, int *sum, cu_pos *pos, int sx, int sy, int ex, int ey);
-__global__ void k_render(int nP, cu_pos *pos, cu_particle_sim *part, cu_color *pic);
 #else
 __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic);
 #endif

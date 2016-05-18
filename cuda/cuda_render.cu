@@ -287,29 +287,9 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
   int posnum;
   cudaMemcpy(&posnum, gv->sum+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
   cu_getpos(posnum, gv);
+   
   cu_render(posnum, gv);
   printf("%d %d\n", posnum, nParticle);
-#elif defined ENABLE_RENDER_SM
-  int sx=gv->policy->GetImageSplitX(), sy=gv->policy->GetImageSplitY();
-  int isizex=gv->policy->GetImageSizeX(), isizey=gv->policy->GetImageSizeY();
-  int numx=gv->policy->GetImageSplitNumX(), numy=gv->policy->GetImageSplitNumY();
-  for(int i=0, startx=0, endx=sx;i<numx;i++, startx+=sx, endx+=sx)
-  {
-      printf("working %d\n", i);
-      if(endx > isizex)endx = isizex;
-      for(int j=0, starty=0, endy=sy;j<numy;j++, starty+=sx, endy+=sy)
-      {
-          if(endy > isizey)endy = isizey;
-          cu_getsum(nParticle, gv, startx, starty, endx, endy);
-          thrust::device_ptr<int> sum_ptr(gv->sum);
-          thrust::inclusive_scan(sum_ptr, sum_ptr+nParticle, sum_ptr);
-          int posnum;
-          cudaMemcpy(&posnum, gv->sum+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
-          cu_pos tmp;
-          cu_getpos(posnum, gv, startx, starty, endx, endy);
-          cu_render(posnum, gv);
-      }
-  }
 #else
   cu_render(nParticle, gv);
 #endif

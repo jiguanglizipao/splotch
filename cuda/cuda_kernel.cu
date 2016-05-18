@@ -29,7 +29,6 @@
 __constant__ cu_param dparams;
 __constant__ cu_color_map_entry dmap[MAXSIZE];
 __constant__ int ptype_points[10];
-extern __shared__ char smdata[];
 
 __device__ __forceinline__ void clamp (float minv, float maxv, float &val)
 {
@@ -579,116 +578,20 @@ __global__ void k_add_images(int n, cu_color *pic, cu_color *pic1, cu_color *pic
 // Render for full atomic implementation
 // --------------------------------------
 
-#ifdef ENABLE_RENDER_SM
-__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int sx, int sy, int ex, int ey)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= nP)return;
-       cu_particle_sim p = part[idx];
-    sum[idx] = part[idx].active;
-    float rfacr = dparams.rfac*p.r;
-    int minx=int(p.x-rfacr+1.f);
-    int maxx=int(p.x+rfacr+1.f);
-    int miny=int(p.y-rfacr+1.f);
-    int maxy=int(p.y+rfacr+1.f);
-    sum[idx] = p.active && (abs(ex+sx-maxx-minx)<=ex-sx+maxx-minx) && (abs(ey+sy-maxy-miny)<=ey-sy+maxy-miny);
-}
-
-__global__ void k_getpos(int nP, int *sum, cu_pos *pos, int sx, int sy, int ex, int ey)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= nP)return;
-    if ((!idx && sum[idx]) || (sum[idx] == sum[idx-1]+1))
-    {
-        int t = sum[idx]-1;
-        pos[t].pos = idx;
-        pos[t].startx = sx;pos[t].endx=ex;
-        pos[t].starty = sy;pos[t].endy=ey;
-    }
-}
-
-__global__ void k_render(int nP, cu_pos *pos, cu_particle_sim *part, cu_color *pic)
-{
-    int idx = blockIdx.x * blockDim.x * blockDim.y + threadIdx.x*blockDim.y + threadIdx.y;
-    cu_color* data = (cu_color*)smdata;
-    cu_pos st = pos[0];
-    int sizex=st.endx-st.startx, sizey=st.endy-st.starty;
-    if (idx < nP)
-    {
-        st = pos[idx];
-        idx = st.pos;
-        cu_particle_sim p = part[idx];
-    
-        // Work out radial factor
-        float rfacr = dparams.rfac*p.r;
-        float radsq = rfacr*rfacr;
-        float stp = -1.f/(dparams.h2sigma*dparams.h2sigma*p.r*p.r);
-    
-        // Get min and max pixels affected, clamp to image boundary
-        int minx=int(p.x-rfacr+1.f);
-        minx=max(minx, int(st.startx));
-        int maxx=int(p.x+rfacr+1.f);
-        maxx=min(maxx, int(st.endx)); 
-        int miny=int(p.y-rfacr+1.f);
-        miny=max(miny, int(st.startx));
-        int maxy=int(p.y+rfacr+1.f);
-        maxy=min(maxy, int(st.endx));
-    
-        // For each pixel on x
-        for(int x = minx; x < maxx; ++x)
-        {
-          // Work out x dist from centre and new yminmax 
-          float dxsq = (x-p.x)*(x-p.x);
-          float dy = sqrt(radsq-dxsq);
-          int miny2=max(miny,int(p.y-dy+1)),
-              maxy2=min(maxy,int(p.y+dy+1));
-          float pre2 = __expf(stp*dxsq);
-          // For each pixel on y
-          for(int y = miny2; y < maxy2; ++y)
-          {
-              // Work out y dist from centre  
-              float dysq = (y - p.y) * (y - p.y);
-              float att = __expf(stp*dysq);
-              // Update global image
-              atomicAdd(&(data[x*sizey+y].r),-att*p.e.r*pre2);
-              atomicAdd(&(data[x*sizey+y].g),-att*p.e.g*pre2);
-              atomicAdd(&(data[x*sizey+y].b),-att*p.e.b*pre2);      
-          }
-        }
-    }
-    __syncthreads();
-
-    for(int x = threadIdx.x; x < sizex; x+=blockDim.x)
-    {
-        int stx = x+st.startx;
-        for(int y = threadIdx.y; y < sizey; y+=blockDim.y)
-        {
-            int sty = y+st.starty;
-            // Update global image
-            atomicAdd(&(pic[stx*dparams.yres+sty].r), data[x*sizey+y].r);
-            atomicAdd(&(pic[stx*dparams.yres+sty].g), data[x*sizey+y].g);
-            atomicAdd(&(pic[stx*dparams.yres+sty].b), data[x*sizey+y].b);      
-        }
-    }
-  //if(idx == 3) printf("px3 r: %f g: %f b: %f\n", pic[3].r,pic[3].g,pic[3].b);
-  
-}
-#endif
-
 #ifdef ENABLE_RENDER_POS
 __global__ void k_getsum(int nP, cu_particle_sim *part, int *sum)
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= nP)return;
-    sum[idx] = part[idx].active;
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nP)return;
+  sum[idx] = part[idx].active;
 }
 
 __global__ void k_getpos(int nP, int *sum, int *pos)
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= nP)return;
-    if ((!idx && sum[idx]) || (sum[idx] == sum[idx-1]+1))
-        pos[sum[idx]-1] = idx;
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= nP)return;
+  if ((!idx && sum[idx]) || (sum[idx] == sum[idx-1]+1))
+      pos[sum[idx]-1] = idx;
 }
 
 __global__ void k_render(int nP, int *pos, cu_particle_sim *part, cu_color *pic)

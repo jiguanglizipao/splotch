@@ -31,10 +31,6 @@ CuPolicy::CuPolicy(int xres, int yres, paramfile &params)
     p_blockSize = params.find<int>("p_block_size", 512); 
     blockx = params.find<int>("blockx_size", 4); 
     blocky = params.find<int>("blocky_size", 16);
-#ifdef ENABLE_RENDER_SM
-    image_sx = params.find<int>("image_splitx", 32); 
-    image_sy = params.find<int>("image_splity", 32); 
-#endif
     x_num_tiles = xres/tile_size.first;
     if (xres%tile_size.first) x_num_tiles++;
     y_num_tiles = yres/tile_size.second;
@@ -86,38 +82,6 @@ size_t CuPolicy::GetImageSize()
     return size;
 }
 
-#ifdef ENABLE_RENDER_SM
-int CuPolicy::GetImageSplitX()
-{
-    return image_sx;
-}
-
-int CuPolicy::GetImageSplitY()
-{
-    return image_sy;
-}
-
-int CuPolicy::GetImageSizeX()
-{
-    return res.first;
-}
-
-int CuPolicy::GetImageSizeY()
-{
-    return res.second;
-}
-
-int CuPolicy::GetImageSplitNumX()
-{
-    return (res.first+image_sx-1)/image_sx;
-}
-
-int CuPolicy::GetImageSplitNumY()
-{
-    return (res.second+image_sy-1)/image_sy;
-}
-#endif
-
 void CuPolicy::GetDimsBlockGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
   {
     *dimBlock = dim3(p_blockSize);
@@ -129,19 +93,9 @@ void CuPolicy::GetDimsBlockGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
 
 void CuPolicy::GetDimsBlockGrid_OnlyGrid(int n, dim3 *dimGrid, dim3 *dimBlock)
   {
-    *dimBlock = dim3(blockx, blocky);
+    *dimBlock = dim3(4, 16);
     int nBlock = n;
     *dimGrid =dim3(nBlock); 
     if (nBlock > m_gridSize)
       cout << "Error: dim grid = " << nBlock << "too large!" << endl;
   }
-#ifdef ENABLE_RENDER_SM
-void CuPolicy::GetDimsBlockGrid_SM(int n, dim3 *dimGrid, dim3 *dimBlock)
-  {
-    *dimBlock = dim3(blockx, blocky);
-    int nBlock = (n + blockx*blocky - 1)/p_blockSize;
-    *dimGrid =dim3(nBlock); 
-    if (nBlock > m_gridSize)
-      cout << "Error: dim grid = " << nBlock << "too large!" << endl;
-  }
-#endif
