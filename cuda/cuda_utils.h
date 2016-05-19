@@ -123,6 +123,10 @@ struct cu_gpu_vars
   int *sum, *pos;
 #endif
 
+#ifdef ENABLE_RENDER_SM
+  int *sum, *num, *loc_v, *loc;
+#endif
+
   // Implementation specific
 #ifndef CUDA_FULL_ATOMICS
 #ifndef CUDA_ATOMIC_TILE_UPDATE
@@ -159,6 +163,10 @@ void cu_render(int nP, cu_gpu_vars* pgv);
 #ifdef ENABLE_RENDER_POS
 void cu_getsum(int nP, cu_gpu_vars* pgv);
 void cu_getpos(int nP, cu_gpu_vars* pgv);
+#endif
+#ifdef ENABLE_RENDER_SM
+void cu_getsum(int nP, cu_gpu_vars* pgv);
+void cu_getloc(int nP, cu_gpu_vars* pgv);
 #endif
 #endif
 

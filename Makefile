@@ -140,13 +140,13 @@ ifeq ($(SYSTYPE),"Linux-cluster")
   else
    CC  = icpc
   endif
-  OPTIMIZE += -g -Ofast -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS 
+  OPTIMIZE += -g -Ofast -DENABLE_RENDER_SM -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS 
   OMP = -qopenmp
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
   CUDA_HOME = /usr/local/cuda
   NVCC = nvcc
   NVCCARCH = -arch=sm_37
-  NVCCFLAGS = -g -ccbin icpc $(NVCCARCH) -dc -use_fast_math #-std=c++11
+  NVCCFLAGS = -g -O3 -ccbin icpc $(NVCCARCH) -dc -use_fast_math #-std=c++11
   LIB_OPT  =  -L$(CUDA_HOME)/lib64 -lcudart
   SUP_INCL += -I$(CUDA_HOME)/include
   endif

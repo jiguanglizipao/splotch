@@ -43,6 +43,7 @@
 
 using namespace std;
 
+#define CLEAR_MEM(p) if(p) {cudaFree(p); p=0;}
 #ifndef CUDA_FULL_ATOMICS
 
 int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, arr2<COLOUR> &Pic_host, cu_gpu_vars* gv, bool a_eq_e, float64 grayabsorb, int xres, int yres, bool doLogs)
@@ -287,9 +288,40 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
   int posnum;
   cudaMemcpy(&posnum, gv->sum+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
   cu_getpos(posnum, gv);
-   
   cu_render(posnum, gv);
   printf("%d %d\n", posnum, nParticle);
+#elif defined ENABLE_RENDER_SM
+  cu_getsum(nParticle, gv);
+
+  thrust::device_ptr<int> sum_ptr(gv->sum);
+  thrust::inclusive_scan(sum_ptr, sum_ptr+nParticle, sum_ptr);
+
+  int posnum;
+  cudaMemcpy(&posnum, gv->sum+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
+
+  size_t size = posnum * sizeof(int);
+  cudaMalloc((void**) &gv->loc, size);
+  cudaMemset(gv->loc, 0, size);
+  size = posnum * sizeof(int);
+  cudaMalloc((void**) &gv->loc_v, size);
+  cudaMemset(gv->loc_v, 0, size);
+  
+  int ns = gv->policy->GetImageSplitNumX()*gv->policy->GetImageSplitNumY();
+  size = ns * sizeof(int);
+  cudaMemset(gv->num, 0, size);
+
+  cu_getloc(nParticle, gv);
+
+  thrust::device_ptr<int> loc_v_ptr(gv->loc_v), loc_ptr(gv->loc);
+  thrust::sort_by_key(loc_v_ptr, loc_v_ptr + posnum, loc_ptr);
+  thrust::device_ptr<int> num_ptr(gv->num);
+  thrust::inclusive_scan(num_ptr, num_ptr+ns, num_ptr);
+
+  printf("Pair Num: %d\nParticle Num: %d\n", posnum, nParticle);
+  cu_render(posnum, gv);
+  cudaDeviceSynchronize();
+  CLEAR_MEM((gv->loc));
+  CLEAR_MEM((gv->loc_v));
 #else
   cu_render(nParticle, gv);
 #endif

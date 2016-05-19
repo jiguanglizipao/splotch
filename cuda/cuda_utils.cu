@@ -148,6 +148,28 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
   cudaMemset(pgv->pos,0,size);
 #endif
 
+#ifdef ENABLE_RENDER_SM
+  //sum vector
+  size = nP * sizeof(int);
+  error = cudaMalloc((void**) &pgv->sum, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "Device Memory: sum vector allocation error!" << endl;
+   return 1;
+  }
+  cudaMemset(pgv->sum,0,size);
+  
+  //num vector
+  size = pgv->policy->GetImageSplitNumX() * pgv->policy->GetImageSplitNumY() * sizeof(int);
+  error = cudaMalloc((void**) &pgv->num, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "Device Memory: num vector allocation error!" << endl;
+   return 1;
+  }
+  cudaMemset(pgv->num,0,size);
+#endif
+
   // Image
   size = pgv->policy->GetImageSize();
   error = cudaMalloc((void**) &pgv->d_pic, size); 
@@ -317,6 +339,7 @@ int cu_process(int n, cu_gpu_vars* pgv)
   return 0;
 }
 
+#ifndef ENABLE_RENDER_SM
 void cu_render(int nP, cu_gpu_vars* pgv)
 {
   // Blocks 512 wide
@@ -332,6 +355,7 @@ void cu_render(int nP, cu_gpu_vars* pgv)
   k_render<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->d_pic);
 #endif
 }
+#endif
 
 #ifdef ENABLE_RENDER_POS
 void cu_getsum(int nP, cu_gpu_vars* pgv)
@@ -346,6 +370,29 @@ void cu_getpos(int nP, cu_gpu_vars* pgv)
   dim3 dimGrid, dimBlock;
   pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
   k_getpos<<<dimGrid,dimBlock>>>(nP, pgv->sum, pgv->pos);
+}
+#endif
+
+#ifdef ENABLE_RENDER_SM
+void cu_getsum(int nP, cu_gpu_vars* pgv)
+{
+    dim3 dimGrid, dimBlock;
+    pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+    k_getsum<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->sum, pgv->policy->GetImageSplitX(), pgv->policy->GetImageSplitY());
+}
+
+void cu_getloc(int nP, cu_gpu_vars* pgv)
+{
+    dim3 dimGrid, dimBlock;
+    pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+    k_getloc<<<dimGrid,dimBlock>>>(nP, pgv->d_pd, pgv->sum, pgv->loc, pgv->loc_v, pgv->num, pgv->policy->GetImageSplitX(), pgv->policy->GetImageSplitY(), pgv->policy->GetImageSplitNumX(), pgv->policy->GetImageSplitNumY());
+}
+void cu_render(int nP, cu_gpu_vars* pgv)
+{
+    dim3 dimGrid, dimBlock;
+    pgv->policy->GetDimsBlockGrid_SM(&dimGrid, &dimBlock);
+    size_t sm_size = pgv->policy->GetImageSplitX()*pgv->policy->GetImageSplitY()*sizeof(cu_color);
+    k_render<<<dimGrid, dimBlock, sm_size>>>(pgv->d_pd, pgv->d_pic, pgv->loc, pgv->loc_v, pgv->num, pgv->policy->GetImageSplitX(), pgv->policy->GetImageSplitY(), pgv->policy->GetImageSplitNumX(), pgv->policy->GetImageSplitNumY());
 }
 #endif
 
@@ -422,6 +469,11 @@ void cu_end(cu_gpu_vars* pgv)
 #ifdef ENABLE_RENDER_POS
   CLEAR_MEM((pgv->sum));
   CLEAR_MEM((pgv->pos));
+#endif
+
+#ifdef ENABLE_RENDER_SM
+  CLEAR_MEM((pgv->sum));
+  CLEAR_MEM((pgv->num));
 #endif
 
 #ifndef CUDA_FULL_ATOMICS

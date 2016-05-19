@@ -578,6 +578,127 @@ __global__ void k_add_images(int n, cu_color *pic, cu_color *pic1, cu_color *pic
 // Render for full atomic implementation
 // --------------------------------------
 
+#ifdef ENABLE_RENDER_SM
+__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int sx, int sy)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= nP || !part[idx].active)
+    {
+        sum[idx]=0;
+        return;
+    }
+    
+    cu_particle_sim p = part[idx];
+    float rfacr = dparams.rfac*p.r;
+    
+    int minx=int(p.x-rfacr+1.f);
+    minx=max(minx,0);
+    int maxx=int(p.x+rfacr+1.f);
+    maxx=min(maxx,dparams.xres); 
+    int miny=int(p.y-rfacr+1.f);
+    miny=max(miny,0);
+    int maxy=int(p.y+rfacr+1.f);
+    maxy=min(maxy,dparams.yres);
+
+    --maxx, --maxy;
+    sum[idx]=(int(maxx/sx)-int(minx/sx)+1)*(int(maxy/sy)-int(miny/sy)+1);
+}
+
+__global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int *loc_v, int *num, int sx, int sy, int nx, int ny)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if(idx >= nP || !part[idx].active)return;
+    int cur = (!idx)?0:sum[idx-1];
+
+    cu_particle_sim p = part[idx];
+    float rfacr = dparams.rfac*p.r;
+    
+    int minx=int(p.x-rfacr+1.f);
+    minx=max(minx,0);
+    int maxx=int(p.x+rfacr+1.f);
+    maxx=min(maxx,dparams.xres); 
+    int miny=int(p.y-rfacr+1.f);
+    miny=max(miny,0);
+    int maxy=int(p.y+rfacr+1.f);
+    maxy=min(maxy,dparams.yres);
+
+    --maxx, --maxy;
+    for(int i=minx/sx;i<=maxx/sx;++i)
+        for(int j=miny/sy;j<=maxy/sy;++j)
+        {
+            loc_v[cur] = i*ny+j;
+            atomicAdd(&(num[i*ny+j]), 1);
+            loc[cur] = idx;
+            ++cur;
+        }
+}
+__global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *loc_v, int *num, int sx, int sy, int nx, int ny)
+{
+    int idx = blockIdx.x, idy = blockIdx.y, id = idx*ny+idy;
+    if (idx >= nx || idy >= ny) return;
+    int startx = sx*idx, endx = min(startx+sx, dparams.xres);
+    int starty = sy*idy, endy = min(starty+sy, dparams.yres);
+    int sizex = endx - startx, sizey = endy - starty;
+    extern __shared__ cu_color sm[];
+    for(int i=threadIdx.x;i<sizex;i+=blockDim.x)
+    {
+        for(int j=threadIdx.y;j<sizey;j+=blockDim.y)
+        {
+            sm[i*sizey+j].r = 0;
+            sm[i*sizey+j].g = 0;
+            sm[i*sizey+j].b = 0;
+        }
+    }
+    __syncthreads();
+    for(int i=((!id)?0:num[id-1])+threadIdx.x; i<num[id]; i+=blockDim.x)
+    {
+        cu_particle_sim p = part[loc[i]];
+        float rfacr = dparams.rfac*p.r;
+        float radsq = rfacr*rfacr;
+        float stp = -1.f/(dparams.h2sigma*dparams.h2sigma*p.r*p.r);
+
+        int minx=int(p.x-rfacr+1.f);
+        minx=max(minx, startx);
+        int maxx=int(p.x+rfacr+1.f);
+        maxx=min(maxx, endx); 
+        int miny=int(p.y-rfacr+1.f);
+        miny=max(miny, starty);
+        int maxy=int(p.y+rfacr+1.f);
+        maxy=min(maxy, endy);
+        for(int x = minx+threadIdx.y; x < maxx; x+=blockDim.y)
+        {
+            int dx = x-startx;
+            float dxsq = (x-p.x)*(x-p.x);
+            float dy = sqrt(radsq-dxsq);
+            int miny2=max(miny,int(p.y-dy+1)),
+            maxy2=min(maxy,int(p.y+dy+1));
+            float pre2 = __expf(stp*dxsq);
+            for(int y = miny2; y < maxy2; ++y)
+            {
+                int dy = y-starty;
+                float dysq = (y - p.y) * (y - p.y);
+                float att = __expf(stp*dysq);
+                atomicAdd(&(sm[dx*sizey+dy].r), -att*p.e.r*pre2);
+                atomicAdd(&(sm[dx*sizey+dy].g), -att*p.e.g*pre2);
+                atomicAdd(&(sm[dx*sizey+dy].b), -att*p.e.b*pre2);      
+            }
+        }
+      }
+    __syncthreads();
+    for(int i=threadIdx.x;i<sizex;i+=blockDim.x)
+    {
+        int dx = i+startx;
+        for(int j=threadIdx.y;j<sizey;j+=blockDim.y)
+        {
+            int dy = j+starty;
+            pic[dx*dparams.yres+dy].r += sm[i*sizey+j].r;
+            pic[dx*dparams.yres+dy].g += sm[i*sizey+j].g;
+            pic[dx*dparams.yres+dy].b += sm[i*sizey+j].b;      
+        }
+    }
+}
+#endif
+
 #ifdef ENABLE_RENDER_POS
 __global__ void k_getsum(int nP, cu_particle_sim *part, int *sum)
 {
@@ -614,7 +735,9 @@ __global__ void k_render(int nP, cu_particle_sim *part, cu_color *pic)
 
   cu_particle_sim p = part[idx];
 
+#ifndef ENABLE_RENDER_POS
   if(p.active)
+#endif
   {
     // Work out radial factor
     float rfacr = dparams.rfac*p.r;
