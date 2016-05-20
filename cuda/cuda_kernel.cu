@@ -590,6 +590,10 @@ __global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int sx, int sy
     
     cu_particle_sim p = part[idx];
     float rfacr = dparams.rfac*p.r;
+    if(rfacr < 0){
+        sum[idx]=0;
+        return;
+    }
     
     int minx=int(p.x-rfacr+1.f);
     minx=max(minx,0);
@@ -632,6 +636,7 @@ __global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int 
             ++cur;
         }
 }
+
 __global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *loc_v, int *num, int sx, int sy, int nx, int ny)
 {
     int idx = blockIdx.x, idy = blockIdx.y, id = idx*ny+idy;
@@ -657,14 +662,16 @@ __global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *lo
         float radsq = rfacr*rfacr;
         float stp = -1.f/(dparams.h2sigma*dparams.h2sigma*p.r*p.r);
 
-//        int minx=int(p.x-rfacr+1.f);
-//        minx=max(minx, startx);
-//        int maxx=int(p.x+rfacr+1.f);
-//        maxx=min(maxx, endx); 
-//        int miny=int(p.y-rfacr+1.f);
-//        miny=max(miny, starty);
-//        int maxy=int(p.y+rfacr+1.f);
-//        maxy=min(maxy, endy);
+        int minx=int(p.x-rfacr+1.f);
+        minx=max(minx, startx);
+        int maxx=int(p.x+rfacr+1.f);
+        maxx=min(maxx, endx); 
+        int miny=int(p.y-rfacr+1.f);
+        miny=max(miny, starty);
+        int maxy=int(p.y+rfacr+1.f);
+        maxy=min(maxy, endy);
+        int tx = maxx-minx, ty=maxy-miny;
+    
 //        for(int x = minx+threadIdx.y; x < maxx; x+=blockDim.y)
 //        {
 //            int dx = x-startx;
@@ -683,16 +690,19 @@ __global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *lo
 //                atomicAdd(&(sm[dx*sizey+dy].b), -att*p.e.b*pre2);      
 //            }
 //        }
-        for(int j=threadIdx.y;j<sizex*sizey;j+=blockDim.y)
+        
+        for (int d=blockDim.y, dx=d/ty, dy=d%ty, lx=threadIdx.y/ty, ly=threadIdx.y%ty;
+                lx<tx; lx=ly+dy<ty?lx+dx:lx+dx+1, ly=ly+dy<ty?ly+dy:ly+dy-ty)
         {
-            int x=j/sizey+startx, y=j%sizey+starty;
+            int x=lx+minx, y=ly+miny;
             float dsq = (x-p.x)*(x-p.x)+(y-p.y)*(y-p.y);
             if(dsq <= radsq)
             {
+                int t=(x-startx)*sizey+y-starty;
                 float att = __expf(stp*dsq);
-                atomicAdd(&(sm[j].r), -att*p.e.r);
-                atomicAdd(&(sm[j].g), -att*p.e.g);
-                atomicAdd(&(sm[j].b), -att*p.e.b);      
+                atomicAdd(&(sm[t].r), -att*p.e.r);
+                atomicAdd(&(sm[t].g), -att*p.e.g);
+                atomicAdd(&(sm[t].b), -att*p.e.b);      
             }
         }    
     }
