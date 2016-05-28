@@ -292,6 +292,7 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
   printf("%d %d\n", posnum, nParticle);
 #elif defined ENABLE_RENDER_SM
   cu_getsum(nParticle, gv);
+  cudaDeviceSynchronize();
 
   thrust::device_ptr<int> sum_ptr(gv->sum);
   thrust::inclusive_scan(sum_ptr, sum_ptr+nParticle, sum_ptr);
@@ -312,6 +313,7 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
 
   cu_getloc(nParticle, gv);
 
+  cudaDeviceSynchronize();
   thrust::device_ptr<int> loc_v_ptr(gv->loc_v), loc_ptr(gv->loc);
   thrust::sort_by_key(loc_v_ptr, loc_v_ptr + posnum, loc_ptr);
   thrust::device_ptr<int> num_ptr(gv->num);
