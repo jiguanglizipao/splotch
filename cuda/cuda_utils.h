@@ -122,9 +122,8 @@ struct cu_gpu_vars
 #ifdef ENABLE_RENDER_POS
   int *sum, *pos;
 #endif
-
 #ifdef ENABLE_RENDER_SM
-  int *sum, *num, *loc_v, *loc;
+  int *sum, *sum2, *num, *num2, *loc_v, *loc_v2, *loc2, *loc;
 #endif
 
   // Implementation specific

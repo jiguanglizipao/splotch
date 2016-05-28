@@ -71,7 +71,7 @@ SUP_INCL = -I. -Icxxsupport -Ic_utils -Ivectorclass
 
 # optimization and warning flags (g++)
 CXX11 = -std=c++11
-OPTIMIZE = -march=native -fpermissive -pedantic #-Wno-long-long -Wfatal-errors -Wextra -Wall -Wstrict-aliasing=2 -Wundef -Wshadow -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -std=c++11 -march=native
+OPTIMIZE = -fpermissive -pedantic #-march=native -Wno-long-long -Wfatal-errors -Wextra -Wall -Wstrict-aliasing=2 -Wundef -Wshadow -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -std=c++11 -march=native
 #-Wno-newline-eof -g
 #-Wold-style-cast -std=c++11
 
@@ -140,7 +140,7 @@ ifeq ($(SYSTYPE),"Linux-cluster")
   else
    CC  = icpc
   endif
-  OPTIMIZE += -g -Ofast -DENABLE_RENDER_SM -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS 
+  OPTIMIZE += -g -Ofast -DENABLE_RENDER_SM -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS -ipo -march=core-avx2 -xCORE-AVX2 -mtune=core-avx2
   OMP = -qopenmp
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
   CUDA_HOME = /usr/local/cuda
