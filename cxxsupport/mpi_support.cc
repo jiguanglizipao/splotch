@@ -240,6 +240,9 @@ void MPI_Manager::allgathervRawVoid (const void *in, int numin, void *out,
 void MPI_Manager::allreduceRawVoid (void *data, NDT type,
   tsize num, redOp op) const
   { MPI_Allreduce (MPI_IN_PLACE,data,num,ndt2mpi(type),op2mop(op),LS_COMM); }
+void MPI_Manager::iallreduceRawVoid (void *data, NDT type,
+  tsize num, redOp op, MPI_Request *req) const
+  { MPI_Iallreduce (MPI_IN_PLACE,data,num,ndt2mpi(type),op2mop(op),LS_COMM, req); }
 void MPI_Manager::allreduceRawVoid (const void *in, void *out, NDT type,
   tsize num, redOp op) const
   {

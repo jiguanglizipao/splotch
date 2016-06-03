@@ -586,7 +586,8 @@ __global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int *sum2, int
         return;
     
     cu_particle_sim p = part[idx];
-    float rfacr = dparams.rfac*p.r;
+    float rfacr1 = dparams.rfac*p.r, rfacr2 = dparams.rfac*p.r, rfacr=(rfacr1+rfacr2)*0.5;
+    //float rfacr = dparams.rfac*p.r;
     sum[idx]=0;sum2[idx]=0;
     if(rfacr < 0 || !part[idx].active)
         return;
@@ -613,7 +614,8 @@ __global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int 
     if(cur == sum[idx])return;
 
     cu_particle_sim p = part[idx];
-    float rfacr = dparams.rfac*p.r;
+    float rfacr1 = dparams.rfac*p.r, rfacr2 = dparams.rfac*p.r, rfacr=(rfacr1+rfacr2)*0.5;
+    //float rfacr = dparams.rfac*p.r;
     
     int minx=int(p.x-rfacr+1.f);
     minx=max(minx,0);
