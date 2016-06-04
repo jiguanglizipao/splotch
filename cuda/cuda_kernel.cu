@@ -637,7 +637,7 @@ __global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int 
         }
 }
 
-__global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *num, int *loc2, int *num2, int sx, int sy, int nx, int ny)
+__global__ void __launch_bounds__(256, 8) k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *num, int *loc2, int *num2, int sx, int sy, int nx, int ny)
 {
     int idx = blockIdx.x, idy = blockIdx.y, id = idx*ny+idy;
     if (idx >= nx || idy >= ny) return;

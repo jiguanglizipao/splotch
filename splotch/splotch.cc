@@ -308,8 +308,8 @@ int main (int argc, const char **argv)
     if(first)
     {
       first=false;
-      continue;
       tstack_pop("Post-processing");
+      continue;
     }
     else
     {
