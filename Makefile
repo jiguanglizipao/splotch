@@ -145,7 +145,7 @@ ifeq ($(SYSTYPE),"Linux-cluster")
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
   CUDA_HOME = /usr/local/cuda-8.0
   NVCC = nvcc
-  NVCCARCH = -arch=sm_61
+  NVCCARCH = -arch=sm_37
   NVCCFLAGS = -g -O3 -ccbin mpiicpc $(NVCCARCH) -dc -use_fast_math #-std=c++11
   LIB_OPT  =  -L$(CUDA_HOME)/lib64 -lcudart
   SUP_INCL += -I$(CUDA_HOME)/include

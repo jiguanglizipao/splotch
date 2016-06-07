@@ -52,6 +52,8 @@
 #endif
 
 using namespace std;
+MPI_Request req;
+bool first=false;
 #ifdef SPLVISIVO
 int splotchMain (VisIVOServerOptions opt)
 #else
@@ -219,8 +221,7 @@ int main (int argc, const char **argv)
   int xres = params.find<int>("xres",800),
       yres = params.find<int>("yres",xres);
   arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
-  bool first=true;
-  MPI_Request req;
+  first=true;
   MPI_Status status;
 
   sceneMaker sMaker(params);
