@@ -62,7 +62,7 @@ void sceneMaker::particle_normalize(vector<particle_sim> &p, bool verbose)
   // should be done more elegantly
   arr<Normalizer<float32> > inorm(nt+20), cnorm(nt+20), rnorm(nt+20);
   int m;
-#ifdef CUDA
+#ifdef ONLY_CUDA
   // In cuda version logs are performed on device
   #pragma omp for schedule(guided,1000)
   for (m=0; m<npart; ++m)
@@ -248,7 +248,7 @@ void sceneMaker::particle_normalize(vector<particle_sim> &p, bool verbose)
 
   tstack_pop("minmax");
 
-#ifdef CUDA
+#ifdef ONLY_CUDA
 
   // Write max/mins to param file to be used in cuda norm/clamping
   for(int t=0; t<nt; t++)
@@ -965,7 +965,7 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
     tstack_pop("Time interpolation");
     }
 
-#ifdef CUDA // ranging is done on GPU
+#ifdef ONLY_CUDA // ranging is done on GPU
 
   // Check for maxes and mins in parameter file
   int nt = params.find<int>("ptypes",1);

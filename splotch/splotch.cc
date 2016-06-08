@@ -309,6 +309,7 @@ int main (int argc, const char **argv)
     if(first)
     {
       first=false;
+      outfile2 = outfile;
       tstack_pop("Post-processing");
       continue;
     }
@@ -385,9 +386,9 @@ int main (int argc, const char **argv)
           }
         }
   
+      outfile2 = outfile;
       tstack_pop("Output");
     }
-    outfile2 = outfile;
 
 
   // Also meant to happen when using CUDA - unimplemented.
