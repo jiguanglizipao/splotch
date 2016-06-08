@@ -44,6 +44,7 @@ void cu_get_trans_params(cu_param &para_trans, paramfile &params, const vec3 &ca
   // If mins and maxs were not already in parameter file, cuda version of particle_normalize in 
   // scenemaker will have written them in.
   int nt = params.find<int>("ptypes",1);
+#ifdef ONLY_CUDA
   for(int t=0; t<nt; t++)
   {
       para_trans.inorm_mins[t] = params.find<float>("intensity_min"+dataToString(t));
@@ -51,6 +52,7 @@ void cu_get_trans_params(cu_param &para_trans, paramfile &params, const vec3 &ca
       para_trans.cnorm_mins[t] = params.find<float>("color_min"+dataToString(t));
       para_trans.cnorm_maxs[t] = params.find<float>("color_max"+dataToString(t));
   }
+#endif
 
   int xres = params.find<int>("xres",800),
       yres = params.find<int>("yres",xres);
@@ -277,7 +279,7 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
   }
 
   // Check if logs have already been done by host or not
-  bool dflt = true;
+  bool dflt = false;//true;
   std::string key = "cuda_doLogs";
   doLogs = findParamWithoutChange<bool>(&fparams, key, dflt);
 

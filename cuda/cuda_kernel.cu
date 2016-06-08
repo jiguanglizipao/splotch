@@ -83,6 +83,7 @@ __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types)
 
     // Normalization and clamping 
 
+#ifdef ONLY_CUDA
 #ifndef NO_I_NORM
   // Norm and clamp I
     if (dparams.inorm_maxs[ptype]==dparams.inorm_mins[ptype])
@@ -111,6 +112,7 @@ __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types)
       else
         eb = (max(dparams.cnorm_mins[ptype],min(dparams.cnorm_maxs[ptype],er))-dparams.cnorm_mins[ptype])/(dparams.cnorm_maxs[ptype]-dparams.cnorm_mins[ptype]);
     }
+#endif
 
   //now do x,y,z
  // float zminval = 0.0;
