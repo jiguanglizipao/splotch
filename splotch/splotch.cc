@@ -52,6 +52,8 @@
 #endif
 
 using namespace std;
+MPI_Request req;
+bool first=false;
 #ifdef SPLVISIVO
 int splotchMain (VisIVOServerOptions opt)
 #else
@@ -214,17 +216,20 @@ int main (int argc, const char **argv)
 #endif
 
   tstack_pop("Setup");
-  string outfile;
+  string outfile, outfile2;
+  bool a_eq_e = params.find<bool>("a_eq_e",true);
+  int xres = params.find<int>("xres",800),
+      yres = params.find<int>("yres",xres);
+  arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
+  first=true;
+  MPI_Status status;
 
   sceneMaker sMaker(params);
   while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile))
     {
-    bool a_eq_e = params.find<bool>("a_eq_e",true);
-    int xres = params.find<int>("xres",800),
-        yres = params.find<int>("yres",xres);
-    arr2<COLOUR> pic(xres,yres);
 
     bool background = params.find<bool>("background",false);
+    pic.fill(COLOUR(0,0,0));
     if(background)
       {
 	if (master)
@@ -297,54 +302,158 @@ int main (int argc, const char **argv)
     }
 
     tstack_push("Post-processing");
-    mpiMgr.allreduceRaw
-      (reinterpret_cast<float *>(&pic[0][0]),3*xres*yres,MPI_Manager::Sum);
+    if(!first)MPI_Wait(&req, &status);
+    pic.swap(pic2);
+    mpiMgr.iallreduceRaw(reinterpret_cast<float *>(&pic2[0][0]),3*xres*yres,MPI_Manager::Sum, &req);
 
+    if(first)
+    {
+      first=false;
+      outfile2 = outfile;
+      tstack_pop("Post-processing");
+      continue;
+    }
+    else
+    {
+      exptable<float32> xexp(-20.0);
+      if (mpiMgr.master() && a_eq_e)
+  #pragma omp parallel for
+        for (int ix=0;ix<xres;ix++)
+          for (int iy=0;iy<yres;iy++)
+            {
+            pic[ix][iy].r=-xexp.expm1(pic[ix][iy].r);
+            pic[ix][iy].g=-xexp.expm1(pic[ix][iy].g);
+            pic[ix][iy].b=-xexp.expm1(pic[ix][iy].b);
+            }
+  
+      tstack_replace("Post-processing","Output");
+  
+      if (master && params.find<bool>("colorbar",false))
+        {
+        cout << endl << "creating color bar ..." << endl;
+        add_colorbar(params,pic,amap);
+        }
+  
+      double gamma=params.find<double>("pic_gamma",1.0);
+      double helligkeit=params.find<double>("pic_brighness",0.0);
+      double kontrast=params.find<double>("pic_contrast",1.0);
+  
+      if (master && (gamma != 1.0 || helligkeit != 0.0 || kontrast != 1.0))
+        {
+  	cout << endl << "immage enhancement (gamma,brightness,contrast) = ("
+  	     << gamma << "," << helligkeit << "," << kontrast << ")" << endl;
+  #pragma omp parallel for
+          for (tsize i=0; i<pic.size1(); ++i)
+            for (tsize j=0; j<pic.size2(); ++j)
+  	    {
+  	      pic[i][j].r = kontrast * pow((double)pic[i][j].r,gamma) + helligkeit;
+                pic[i][j].g = kontrast * pow((double)pic[i][j].g,gamma) + helligkeit;
+                pic[i][j].b = kontrast * pow((double)pic[i][j].b,gamma) + helligkeit;
+  	    }
+         }
+  
+      if(!params.find<bool>("AnalyzeSimulationOnly"))
+        {
+        if (master)
+          {
+          cout << endl << "saving file " << outfile2 << " ..." << endl;
+  
+          LS_Image img(pic.size1(),pic.size2());
+  
+  #pragma omp parallel for
+          for (tsize i=0; i<pic.size1(); ++i)
+            for (tsize j=0; j<pic.size2(); ++j)
+              img.put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
+          int pictype = params.find<int>("pictype",0);
+          switch(pictype)
+            {
+            case 0:
+              img.write_TGA(outfile2+".tga");
+              break;
+            case 1:
+              planck_fail("ASCII PPM no longer supported");
+              break;
+            case 2:
+              img.write_PPM(outfile2+".ppm");
+              break;
+            case 3:
+              img.write_TGA_rle(outfile2+".tga");
+              break;
+            default:
+              planck_fail("No valid image file type given ...");
+              break;
+            }
+          }
+        }
+  
+      outfile2 = outfile;
+      tstack_pop("Output");
+    }
+
+
+  // Also meant to happen when using CUDA - unimplemented.
+  #if (defined(OPENCL))
+    cuda_timeReport();
+  #endif
+    timeReport();
+
+    mpiMgr.barrier();
+    // Abandon ship if a file named "stop" is found in the working directory.
+    // ==>  Allows to stop rendering conveniently using a simple "touch stop".
+    planck_assert (!file_present("stop"),"stop file found");
+    }
+
+  if(!first)
+  {
+    MPI_Wait(&req, &status);
+    pic.swap(pic2);
+    tstack_push("Post-processing");
+  
     exptable<float32> xexp(-20.0);
     if (mpiMgr.master() && a_eq_e)
 #pragma omp parallel for
-      for (int ix=0;ix<xres;ix++)
-        for (int iy=0;iy<yres;iy++)
-          {
-          pic[ix][iy].r=-xexp.expm1(pic[ix][iy].r);
-          pic[ix][iy].g=-xexp.expm1(pic[ix][iy].g);
-          pic[ix][iy].b=-xexp.expm1(pic[ix][iy].b);
-          }
-
-    tstack_replace("Post-processing","Output");
-
-    if (master && params.find<bool>("colorbar",false))
-      {
-      cout << endl << "creating color bar ..." << endl;
-      add_colorbar(params,pic,amap);
-      }
-
-    double gamma=params.find<double>("pic_gamma",1.0);
-    double helligkeit=params.find<double>("pic_brighness",0.0);
-    double kontrast=params.find<double>("pic_contrast",1.0);
-
-    if (master && (gamma != 1.0 || helligkeit != 0.0 || kontrast != 1.0))
-      {
-	cout << endl << "immage enhancement (gamma,brightness,contrast) = ("
-	     << gamma << "," << helligkeit << "," << kontrast << ")" << endl;
-#pragma omp parallel for
-        for (tsize i=0; i<pic.size1(); ++i)
-          for (tsize j=0; j<pic.size2(); ++j)
-	    {
-	      pic[i][j].r = kontrast * pow((double)pic[i][j].r,gamma) + helligkeit;
-              pic[i][j].g = kontrast * pow((double)pic[i][j].g,gamma) + helligkeit;
-              pic[i][j].b = kontrast * pow((double)pic[i][j].b,gamma) + helligkeit;
-	    }
-       }
-
-    if(!params.find<bool>("AnalyzeSimulationOnly"))
-      {
-      if (master)
+        for (int ix=0;ix<xres;ix++)
+          for (int iy=0;iy<yres;iy++)
+            {
+            pic[ix][iy].r=-xexp.expm1(pic[ix][iy].r);
+            pic[ix][iy].g=-xexp.expm1(pic[ix][iy].g);
+            pic[ix][iy].b=-xexp.expm1(pic[ix][iy].b);
+            }
+  
+      tstack_replace("Post-processing","Output");
+  
+      if (master && params.find<bool>("colorbar",false))
         {
-        cout << endl << "saving file " << outfile << " ..." << endl;
-
-        LS_Image img(pic.size1(),pic.size2());
-
+        cout << endl << "creating color bar ..." << endl;
+        add_colorbar(params,pic,amap);
+        }
+  
+      double gamma=params.find<double>("pic_gamma",1.0);
+      double helligkeit=params.find<double>("pic_brighness",0.0);
+      double kontrast=params.find<double>("pic_contrast",1.0);
+  
+      if (master && (gamma != 1.0 || helligkeit != 0.0 || kontrast != 1.0))
+        {
+            cout << endl << "immage enhancement (gamma,brightness,contrast) = ("
+                << gamma << "," << helligkeit << "," << kontrast << ")" << endl;
+#pragma omp parallel for
+         for (tsize i=0; i<pic.size1(); ++i)
+           for (tsize j=0; j<pic.size2(); ++j)
+         {
+           pic[i][j].r = kontrast * pow((double)pic[i][j].r,gamma) + helligkeit;
+               pic[i][j].g = kontrast * pow((double)pic[i][j].g,gamma) + helligkeit;
+               pic[i][j].b = kontrast * pow((double)pic[i][j].b,gamma) + helligkeit;
+         }
+        }
+  
+     if(!params.find<bool>("AnalyzeSimulationOnly"))
+       {
+       if (master)
+         {
+         cout << endl << "saving file " << outfile << " ..." << endl;
+  
+         LS_Image img(pic.size1(),pic.size2());
+  
 #pragma omp parallel for
         for (tsize i=0; i<pic.size1(); ++i)
           for (tsize j=0; j<pic.size2(); ++j)
@@ -370,22 +479,13 @@ int main (int argc, const char **argv)
           }
         }
       }
-
+  
     tstack_pop("Output");
-
-
-  // Also meant to happen when using CUDA - unimplemented.
   #if (defined(OPENCL))
     cuda_timeReport();
   #endif
     timeReport();
-
-    mpiMgr.barrier();
-    // Abandon ship if a file named "stop" is found in the working directory.
-    // ==>  Allows to stop rendering conveniently using a simple "touch stop".
-    planck_assert (!file_present("stop"),"stop file found");
-    }
-
+  }
 #ifdef VS
   //Just to hold the screen to read the messages when debugging
   cout << endl << "Press any key to end..." ;

@@ -83,6 +83,7 @@ __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types)
 
     // Normalization and clamping 
 
+#ifdef ONLY_CUDA
 #ifndef NO_I_NORM
   // Norm and clamp I
     if (dparams.inorm_maxs[ptype]==dparams.inorm_mins[ptype])
@@ -111,6 +112,7 @@ __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types)
       else
         eb = (max(dparams.cnorm_mins[ptype],min(dparams.cnorm_maxs[ptype],er))-dparams.cnorm_mins[ptype])/(dparams.cnorm_maxs[ptype]-dparams.cnorm_mins[ptype]);
     }
+#endif
 
   //now do x,y,z
  // float zminval = 0.0;
@@ -579,21 +581,18 @@ __global__ void k_add_images(int n, cu_color *pic, cu_color *pic1, cu_color *pic
 // --------------------------------------
 
 #ifdef ENABLE_RENDER_SM
-__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int sx, int sy)
+__global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int *sum2, int sx, int sy)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx >= nP || !part[idx].active)
-    {
-        sum[idx]=0;
+    if(idx >= nP)
         return;
-    }
     
     cu_particle_sim p = part[idx];
-    float rfacr = dparams.rfac*p.r;
-    if(rfacr < 0){
-        sum[idx]=0;
+    float rfacr1 = dparams.rfac*p.r, rfacr2 = dparams.rfac*p.r, rfacr=(rfacr1+rfacr2)*0.5;
+    //float rfacr = dparams.rfac*p.r;
+    sum[idx]=0;sum2[idx]=0;
+    if(rfacr < 0 || !part[idx].active)
         return;
-    }
     
     int minx=int(p.x-rfacr+1.f);
     minx=max(minx,0);
@@ -605,7 +604,8 @@ __global__ void k_getsum(int nP, cu_particle_sim *part, int *sum, int sx, int sy
     maxy=min(maxy,dparams.yres);
 
     --maxx, --maxy;
-    sum[idx]=(int(maxx/sx)-int(minx/sx)+1)*(int(maxy/sy)-int(miny/sy)+1);
+    int size = (int(maxx/sx)-int(minx/sx)+1)*(int(maxy/sy)-int(miny/sy)+1);
+    if((maxx-minx)*(maxy-miny) <= 1024)sum2[idx]=size;else sum[idx]=size;
 }
 
 __global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int *loc_v, int *num, int sx, int sy, int nx, int ny)
@@ -613,9 +613,11 @@ __global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if(idx >= nP || !part[idx].active)return;
     int cur = (!idx)?0:sum[idx-1];
+    if(cur == sum[idx])return;
 
     cu_particle_sim p = part[idx];
-    float rfacr = dparams.rfac*p.r;
+    float rfacr1 = dparams.rfac*p.r, rfacr2 = dparams.rfac*p.r, rfacr=(rfacr1+rfacr2)*0.5;
+    //float rfacr = dparams.rfac*p.r;
     
     int minx=int(p.x-rfacr+1.f);
     minx=max(minx,0);
@@ -637,7 +639,7 @@ __global__ void k_getloc(int nP, cu_particle_sim *part, int *sum, int *loc, int 
         }
 }
 
-__global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *loc_v, int *num, int sx, int sy, int nx, int ny)
+__global__ void __launch_bounds__(256, 8) k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *num, int *loc2, int *num2, int sx, int sy, int nx, int ny)
 {
     int idx = blockIdx.x, idy = blockIdx.y, id = idx*ny+idy;
     if (idx >= nx || idy >= ny) return;
@@ -672,26 +674,40 @@ __global__ void k_render(cu_particle_sim *part, cu_color *pic, int *loc, int *lo
         maxy=min(maxy, endy);
         int tx = maxx-minx, ty=maxy-miny;
     
-//        for(int x = minx+threadIdx.y; x < maxx; x+=blockDim.y)
-//        {
-//            int dx = x-startx;
-//            float dxsq = (x-p.x)*(x-p.x);
-//            float dy = sqrt(radsq-dxsq);
-//            int miny2=max(miny,int(p.y-dy+1)),
-//            maxy2=min(maxy,int(p.y+dy+1));
-//            float pre2 = __expf(stp*dxsq);
-//            for(int y = miny2; y < maxy2; ++y)
-//            {
-//                int dy = y-starty;
-//                float dysq = (y - p.y) * (y - p.y);
-//                float att = __expf(stp*dysq);
-//                atomicAdd(&(sm[dx*sizey+dy].r), -att*p.e.r*pre2);
-//                atomicAdd(&(sm[dx*sizey+dy].g), -att*p.e.g*pre2);
-//                atomicAdd(&(sm[dx*sizey+dy].b), -att*p.e.b*pre2);      
-//            }
-//        }
-        
         for (int d=blockDim.y, dx=d/ty, dy=d%ty, lx=threadIdx.y/ty, ly=threadIdx.y%ty;
+                lx<tx; lx=ly+dy<ty?lx+dx:lx+dx+1, ly=ly+dy<ty?ly+dy:ly+dy-ty)
+        {
+            int x=lx+minx, y=ly+miny;
+            float dsq = (x-p.x)*(x-p.x)+(y-p.y)*(y-p.y);
+            if(dsq <= radsq)
+            {
+                int t=(x-startx)*sizey+y-starty;
+                float att = __expf(stp*dsq);
+                atomicAdd(&(sm[t].r), -att*p.e.r);
+                atomicAdd(&(sm[t].g), -att*p.e.g);
+                atomicAdd(&(sm[t].b), -att*p.e.b);      
+            }
+        }    
+    }
+    __syncthreads();
+    for(int i=((!id)?0:num2[id-1])+threadIdx.y; i<num2[id]; i+=blockDim.y)
+    {
+        cu_particle_sim p = part[loc2[i]];
+        float rfacr = dparams.rfac*p.r;
+        float radsq = rfacr*rfacr;
+        float stp = -1.f/(dparams.h2sigma*dparams.h2sigma*p.r*p.r);
+
+        int minx=int(p.x-rfacr+1.f);
+        minx=max(minx, startx);
+        int maxx=int(p.x+rfacr+1.f);
+        maxx=min(maxx, endx); 
+        int miny=int(p.y-rfacr+1.f);
+        miny=max(miny, starty);
+        int maxy=int(p.y+rfacr+1.f);
+        maxy=min(maxy, endy);
+        int tx = maxx-minx, ty=maxy-miny;
+    
+        for (int d=blockDim.x, dx=d/ty, dy=d%ty, lx=threadIdx.x/ty, ly=threadIdx.x%ty;
                 lx<tx; lx=ly+dy<ty?lx+dx:lx+dx+1, ly=ly+dy<ty?ly+dy:ly+dy-ty)
         {
             int x=lx+minx, y=ly+miny;

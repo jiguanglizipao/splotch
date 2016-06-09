@@ -1,3 +1,6 @@
 *.o
 *~
 Splotch6-Linux-cluster
+*.tga
+*.log
+*.bak

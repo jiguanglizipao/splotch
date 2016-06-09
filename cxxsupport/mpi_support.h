@@ -31,6 +31,7 @@
 #define PLANCK_MPI_SUPPORT_H
 
 #include <vector>
+#include <mpi.h>
 #include "datatypes.h"
 #include "arr.h"
 #include "share_utils.h"
@@ -338,6 +339,10 @@ class MPI_Manager
     template<typename T> void allreduceRaw (T *data, tsize num,
       redOp op) const
       { allreduceRawVoid (data, nativeType<T>(), num, op); }
+    void iallreduceRawVoid (void *data, NDT type, tsize num, redOp op, MPI_Request *req) const;
+    template<typename T> void iallreduceRaw (T *data, tsize num,
+      redOp op, MPI_Request *req) const
+      { iallreduceRawVoid (data, nativeType<T>(), num, op, req); }
     template<typename T> void allreduce (arr<T> &data, redOp op) const
       { allreduceRaw (&data[0], data.size(), op); }
     template<typename T> void allreduce (std::vector<T> &data, redOp op) const

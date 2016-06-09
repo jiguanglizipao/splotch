@@ -296,20 +296,30 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
 
   thrust::device_ptr<int> sum_ptr(gv->sum);
   thrust::inclusive_scan(sum_ptr, sum_ptr+nParticle, sum_ptr);
+  thrust::device_ptr<int> sum2_ptr(gv->sum2);
+  thrust::inclusive_scan(sum2_ptr, sum2_ptr+nParticle, sum2_ptr);
 
   int posnum;
   cudaMemcpy(&posnum, gv->sum+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
+  int posnum2;
+  cudaMemcpy(&posnum2, gv->sum2+nParticle-1, sizeof(int), cudaMemcpyDeviceToHost);
 
   size_t size = posnum * sizeof(int);
   cudaMalloc((void**) &gv->loc, size);
   cudaMemset(gv->loc, 0, size);
-  size = posnum * sizeof(int);
   cudaMalloc((void**) &gv->loc_v, size);
   cudaMemset(gv->loc_v, 0, size);
+  
+  size = posnum2 * sizeof(int);
+  cudaMalloc((void**) &gv->loc2, size);
+  cudaMemset(gv->loc2, 0, size);
+  cudaMalloc((void**) &gv->loc_v2, size);
+  cudaMemset(gv->loc_v2, 0, size);
   
   int ns = gv->policy->GetImageSplitNumX()*gv->policy->GetImageSplitNumY();
   size = ns * sizeof(int);
   cudaMemset(gv->num, 0, size);
+  cudaMemset(gv->num2, 0, size);
 
   cu_getloc(nParticle, gv);
 
@@ -318,12 +328,19 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
   thrust::sort_by_key(loc_v_ptr, loc_v_ptr + posnum, loc_ptr);
   thrust::device_ptr<int> num_ptr(gv->num);
   thrust::inclusive_scan(num_ptr, num_ptr+ns, num_ptr);
+  
+  thrust::device_ptr<int> loc_v2_ptr(gv->loc_v2), loc2_ptr(gv->loc2);
+  thrust::sort_by_key(loc_v2_ptr, loc_v2_ptr + posnum2, loc2_ptr);
+  thrust::device_ptr<int> num2_ptr(gv->num2);
+  thrust::inclusive_scan(num2_ptr, num2_ptr+ns, num2_ptr);
 
-  printf("Pair Num: %d\nParticle Num: %d\n", posnum, nParticle);
+  printf("Pair Num: %d %d\nParticle Num: %d\n", posnum, posnum2, nParticle);
   cu_render(posnum, gv);
   cudaDeviceSynchronize();
   CLEAR_MEM((gv->loc));
   CLEAR_MEM((gv->loc_v));
+  CLEAR_MEM((gv->loc2));
+  CLEAR_MEM((gv->loc_v2));
 #else
   cu_render(nParticle, gv);
 #endif
