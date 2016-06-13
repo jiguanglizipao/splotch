@@ -23,10 +23,10 @@
 
 using namespace std;
 
-void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<particle_sim> &particle, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, vector<COLOURMAP> &amap, float b_brightness, paramfile &g_params)
+void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<particle_sim> &particle, const vec3 campos, const vec3 centerpos, const vec3 lookat, vec3 sky, vector<COLOURMAP> &amap, float b_brightness, paramfile g_params)
 {
-  tstack_push("CUDA");
-  tstack_push("Device setup");
+  //tstack_push("CUDA");
+  //tstack_push("Device setup");
   cudaSetDevice (mydevID); // initialize cuda runtime
   long int nP = particle.size();
 
@@ -76,7 +76,7 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
   // Initialise device and allocate arrays
   bool doLogs;
   int error = cu_init(mydevID, len, ntiles, &gv, g_params, campos, centerpos, lookat, sky, b_brightness, doLogs);
-  tstack_pop("Device setup");
+  //tstack_pop("Device setup");
   if (!error)
   {
     // Now we start
@@ -98,21 +98,21 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
 #ifndef CUDA_FULL_ATOMICS
       // Combine host render of large particles to final image
       // No need to do this for atomic implementation
-      tstack_push("combine images");
+      //tstack_push("combine images");
       for (int x=0; x<xres; x++)
         for (int y=0; y<yres; y++)
           pic[x][y] += Pic_host[x][y];
-      tstack_pop("combine images");
+      //tstack_pop("combine images");
 #endif
 
       cout << "Rank " << mpiMgr.rank() << ": Rendered " << nPR << "/" << nP << " particles" << endl << endl;
       startP = endP;
     }
     // Get device image and combine with final image
-    tstack_push("add_device_image()");
+    //tstack_push("add_device_image()");
     add_device_image(pic, &gv, xres, yres);
-    tstack_pop("add_device_image()");
-    tstack_pop("CUDA");
+    //tstack_pop("add_device_image()");
+    //tstack_pop("CUDA");
     cu_end(&gv);
   }
 

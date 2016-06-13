@@ -31,6 +31,7 @@ extern __constant__ int ptype_points[10];
 
 #define CLEAR_MEM(p) if(p) {cudaFree(p); p=0;}
 
+float split_r;
 
 template<typename T> T findParamWithoutChange(paramfile *param, std::string &key, T &deflt)
 {
@@ -263,7 +264,7 @@ int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fpa
   //retrieve parameters
   cu_param tparams;
   cu_get_trans_params(tparams,fparams,campos,lookat,sky,centerpos);
-
+  
   tparams.zmaxval   = fparams.find<float>("zmax",1.e23);
   tparams.zminval   = fparams.find<float>("zmin",0.0);
   tparams.ptypes    = fparams.find<int>("ptypes",1);

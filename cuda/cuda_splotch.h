@@ -29,11 +29,22 @@
 #include "cuda/cuda_utils.h"
 #include "cuda/cuda_render.h"
 
-void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, std::vector<particle_sim> &particle, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, std::vector<COLOURMAP> &amap, float b_brightness, paramfile &g_params);
+#include <thrust/host_vector.h>
+#include <thrust/partition.h>
+#include <thrust/system/omp/execution_policy.h>
+
+void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, std::vector<particle_sim> &particle, const vec3 campos, const vec3 centerpos, const vec3 lookat, vec3 sky, std::vector<COLOURMAP> &amap, float b_brightness, paramfile g_params);
+
 void setup_colormap(int ptypes, std::vector<COLOURMAP> &amap, cu_gpu_vars* gv);
 
 // NVIDIA device query functions defined in cuda_device_query.cu
 int check_device(int rank);
 void print_device_info(int rank, int dev);
+
+template <typename T>
+size_t split_particle(T start, T end)
+{
+    return thrust::partition(thrust::omp::par, start, end, render_split()) - start;
+}
 
 #endif

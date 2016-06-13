@@ -36,6 +36,7 @@
 
 #ifdef CUDA
 #include "cuda/cuda_splotch.h"
+#include <thread>
 #endif
 #ifdef OPENCL
 #include "opencl/splotch_cuda2.h"
@@ -274,10 +275,60 @@ int main (int argc, const char **argv)
       if (mydevID >= 0)
       {
 #ifdef CUDA
+#ifdef ONLY_CUDA
         if (!a_eq_e) planck_fail("CUDA only supported for A==E so far");
         tstack_push("CUDA");
         cuda_rendering(mydevID, nTasksDev, pic, *pData, campos, centerpos, lookat, sky, amap, b_brightness, params);
         tstack_pop("CUDA");
+#else
+        tstack_push("CUDA");
+        tstack_push("CUDA Split");
+        split_r = params.find<float>("split_r", 0.0);
+        size_t split = split_particle(&((*pData)[0]), &((*pData)[npart]));
+        printf("myID=%d Split particles at %d/%d\n", myID, split, npart);
+        tstack_pop("CUDA Split");
+
+        tstack_push("CUDA Init Vector");
+        std::vector<particle_sim> pData_cpu(split);
+        std::vector<particle_sim> pData_gpu(npart-split);
+        #pragma omp parallel for
+        for (int i=0;i<split;i++)pData_cpu[i]=(*pData)[i];
+        #pragma omp parallel for
+        for (int i=split;i<npart;i++)pData_gpu[i-split]=(*pData)[i];
+        //std::vector<particle_sim> pData_cpu((*pData).begin(), (*pData).begin()+split);
+        //std::vector<particle_sim> pData_gpu((*pData).begin()+split+1, (*pData).end());
+        //std::vector<particle_sim> &pData_ref = *pData;
+        arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
+        tstack_pop("CUDA Init Vector");
+
+        std::thread gpu_render([mydevID, nTasksDev, &pic_gpu, &pData_gpu, campos, centerpos, lookat, sky, &amap, b_brightness, params]{
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                cuda_rendering(mydevID, nTasksDev, pic_gpu, pData_gpu, campos, centerpos, lookat, sky, amap, b_brightness, params);
+                });
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(42, &cpuset);
+        pthread_setaffinity_np(gpu_render.native_handle(), sizeof(cpu_set_t), &cpuset);
+        int render_threads = params.find<int>("render_threads", 8);
+        int threads = omp_get_max_threads();
+        omp_set_num_threads(render_threads);
+        host_rendering(params, pData_cpu, pic_cpu, campos, centerpos, lookat, sky, amap, b_brightness, npart_all);
+        omp_set_num_threads(threads);
+        tstack_push("CUDA Wait");
+        gpu_render.join();
+        tstack_pop("CUDA Wait");
+        tstack_push("CUDA Merge");
+        #pragma omp parallel for
+        for (int ix=0;ix<xres;ix++)
+            for (int iy=0;iy<yres;iy++)
+            {
+                pic[ix][iy].r=pic_cpu[ix][iy].r+pic_gpu[ix][iy].r;
+                pic[ix][iy].g=pic_cpu[ix][iy].g+pic_gpu[ix][iy].g;
+                pic[ix][iy].b=pic_cpu[ix][iy].b+pic_gpu[ix][iy].b;
+            }
+        tstack_pop("CUDA Merge");
+        tstack_pop("CUDA");
+#endif
 #endif
 #ifdef OPENCL
         tstack_push("OPENCL");

@@ -25,6 +25,9 @@
 #include <algorithm>
 #include <mpi.h>
 
+#ifdef CUDA
+extern float split_r;
+#endif 
 #include "splotch/splotch_host.h"
 #include "kernel/transform.h"
 #include "cxxsupport/lsconstants.h"
