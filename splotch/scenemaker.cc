@@ -30,6 +30,9 @@
 #include "cxxsupport/datatypes.h"
 #include "reader/reader.h"
 #include "booster/mesh_vis.h"
+#ifdef CUDA
+#include "cuda/cuda_splotch.h"
+#endif 
 
 #ifndef M_PI
 #define M_PI           3.14159265358979323846
@@ -998,6 +1001,7 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
   tstack_pop("Particle ranging");
 #endif
 
+  split_data = split_particle(&particle_data[0], &particle_data.back());
   if (scenes[cur_scene].keep_particles) p_orig = particle_data;
 
 // boost initialization
@@ -1012,9 +1016,15 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
     }
   }
 
+#ifdef CUDA
+bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
+  vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos, vec3 &lookat, vec3 &sky,
+  string &outfile, int &split)
+#else
 bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
   vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos, vec3 &lookat, vec3 &sky,
   string &outfile)
+#endif
   {
   if (tsize(++cur_scene) >= scenes.size()) return false;
 
@@ -1115,7 +1125,9 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
       logFile << it->first << "=" << it->second << endl;
     logFile.close();
     }
-
+#ifdef CUDA
+    split = split_data;
+#endif
   return true;
   }
 

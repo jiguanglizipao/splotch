@@ -44,6 +44,9 @@ class sceneMaker
     std::vector<MyIDType> idx1, idx2;
 
     int snr1_now, snr2_now;
+#ifdef CUDA
+    int split_data;
+#endif
 
     // buffers to hold the times relevant to the *currently loaded snapshots*
     double time1, time2;
@@ -69,9 +72,15 @@ class sceneMaker
 
   public:
   sceneMaker (paramfile &par);
+#ifdef CUDA
+  bool getNextScene (std::vector<particle_sim> &particle_data,
+      std::vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos,
+      vec3 &lookat, vec3 &sky, std::string &outfile, int &split);
+#else
   bool getNextScene (std::vector<particle_sim> &particle_data,
       std::vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos,
       vec3 &lookat, vec3 &sky, std::string &outfile);
+#endif
 
 #ifdef MIC
     // Allow mic to know if it should free data

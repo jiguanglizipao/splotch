@@ -221,12 +221,18 @@ int main (int argc, const char **argv)
   bool a_eq_e = params.find<bool>("a_eq_e",true);
   int xres = params.find<int>("xres",800),
       yres = params.find<int>("yres",xres);
+  int split;
   arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
   first=true;
   MPI_Status status;
 
+  split_r = params.find<float>("split_r", 0.0);
   sceneMaker sMaker(params);
+#ifdef CUDA
+  while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile, split))
+#else
   while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile))
+#endif
     {
 
     bool background = params.find<bool>("background",false);
@@ -282,22 +288,13 @@ int main (int argc, const char **argv)
         tstack_pop("CUDA");
 #else
         tstack_push("CUDA");
-        tstack_push("CUDA Split");
-        split_r = params.find<float>("split_r", 0.0);
-        size_t split = split_particle(&((*pData)[0]), &((*pData)[npart]));
         printf("myID=%d Split particles at %d/%d\n", myID, split, npart);
-        tstack_pop("CUDA Split");
 
         tstack_push("CUDA Init Vector");
-        std::vector<particle_sim> pData_cpu(split);
         std::vector<particle_sim> pData_gpu(npart-split);
         #pragma omp parallel for
-        for (int i=0;i<split;i++)pData_cpu[i]=(*pData)[i];
-        #pragma omp parallel for
         for (int i=split;i<npart;i++)pData_gpu[i-split]=(*pData)[i];
-        //std::vector<particle_sim> pData_cpu((*pData).begin(), (*pData).begin()+split);
-        //std::vector<particle_sim> pData_gpu((*pData).begin()+split+1, (*pData).end());
-        //std::vector<particle_sim> &pData_ref = *pData;
+        (*pData).resize(split);
         arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
         tstack_pop("CUDA Init Vector");
 
@@ -312,7 +309,7 @@ int main (int argc, const char **argv)
         int render_threads = params.find<int>("render_threads", 8);
         int threads = omp_get_max_threads();
         omp_set_num_threads(render_threads);
-        host_rendering(params, pData_cpu, pic_cpu, campos, centerpos, lookat, sky, amap, b_brightness, npart_all);
+        host_rendering(params, *pData, pic_cpu, campos, centerpos, lookat, sky, amap, b_brightness, npart_all);
         omp_set_num_threads(threads);
         tstack_push("CUDA Wait");
         gpu_render.join();
