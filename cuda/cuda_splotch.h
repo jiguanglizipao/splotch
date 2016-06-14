@@ -33,7 +33,7 @@
 #include <thrust/partition.h>
 #include <thrust/system/omp/execution_policy.h>
 
-void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, std::vector<particle_sim> &particle, const vec3 campos, const vec3 centerpos, const vec3 lookat, vec3 sky, std::vector<COLOURMAP> &amap, float b_brightness, paramfile g_params);
+void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, std::vector<particle_sim> &particle, int split, int npart, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, std::vector<COLOURMAP> &amap, float b_brightness, paramfile &g_params);
 
 void setup_colormap(int ptypes, std::vector<COLOURMAP> &amap, cu_gpu_vars* gv);
 

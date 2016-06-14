@@ -23,12 +23,12 @@
 
 using namespace std;
 
-void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<particle_sim> &particle, const vec3 campos, const vec3 centerpos, const vec3 lookat, vec3 sky, vector<COLOURMAP> &amap, float b_brightness, paramfile g_params)
+void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<particle_sim> &particle, int split, int npart, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, vector<COLOURMAP> &amap, float b_brightness, paramfile &g_params)
 {
   //tstack_push("CUDA");
   //tstack_push("Device setup");
   cudaSetDevice (mydevID); // initialize cuda runtime
-  long int nP = particle.size();
+  long int nP = npart-split;
 
   // Fill our output image with black
   pic.fill(COLOUR(0.0, 0.0, 0.0));
@@ -93,7 +93,7 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
       // Set range and draw first chunk
       endP = startP + len;
       if (endP > nP) endP = nP;
-      nPR += cu_draw_chunk(mydevID, (cu_particle_sim *) &(particle[startP]), endP-startP, Pic_host, &gv, a_eq_e, grayabsorb, xres, yres, doLogs);
+      nPR += cu_draw_chunk(mydevID, (cu_particle_sim *) &(particle[startP+split]), endP-startP, Pic_host, &gv, a_eq_e, grayabsorb, xres, yres, doLogs);
       
 #ifndef CUDA_FULL_ATOMICS
       // Combine host render of large particles to final image

@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstring>
 
 #include "splotch/scenemaker.h"
 #include "splotch/splotchutils.h"
@@ -759,7 +760,14 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
   {
   if (scenes[cur_scene].reuse_particles)
     {
-    particle_data=p_orig;
+
+  tstack_push("Copy");
+    particle_data.resize(p_orig.size());
+    #pragma omp parallel for
+    for (int i=0;i<p_orig.size();i++)particle_data[i]=p_orig[i];
+    //memcpy(&particle_data[0], &p_orig[0], p_orig.size()*sizeof(particle_sim));
+    //particle_data=p_orig;
+  tstack_pop("Copy");
     return;
     }
   tstack_push("Input");
@@ -1001,7 +1009,9 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
   tstack_pop("Particle ranging");
 #endif
 
+#ifdef CUDA
   split_data = split_particle(&particle_data[0], &particle_data.back());
+#endif
   if (scenes[cur_scene].keep_particles) p_orig = particle_data;
 
 // boost initialization
@@ -1028,6 +1038,7 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
   {
   if (tsize(++cur_scene) >= scenes.size()) return false;
 
+  tstack_push("getNextScene");
   const scene &scn=scenes[cur_scene];
 
   // patch the params object with parameter values relevant to the current scene
@@ -1128,6 +1139,7 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
 #ifdef CUDA
     split = split_data;
 #endif
+  tstack_pop("getNextScene");
   return true;
   }
 

@@ -223,12 +223,15 @@ int main (int argc, const char **argv)
       yres = params.find<int>("yres",xres);
   int split;
   arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
+  arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
+  std::vector<particle_sim> pData_gpu;
   first=true;
   MPI_Status status;
-
-  split_r = params.find<float>("split_r", 0.0);
+  
   sceneMaker sMaker(params);
+  tstack_push("Main while");
 #ifdef CUDA
+  split_r = params.find<float>("split_r", 0.0);
   while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile, split))
 #else
   while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile))
@@ -291,17 +294,18 @@ int main (int argc, const char **argv)
         printf("myID=%d Split particles at %d/%d\n", myID, split, npart);
 
         tstack_push("CUDA Init Vector");
-        std::vector<particle_sim> pData_gpu(npart-split);
-        #pragma omp parallel for
-        for (int i=split;i<npart;i++)pData_gpu[i-split]=(*pData)[i];
-        (*pData).resize(split);
-        arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
+//        #pragma omp parallel for
+//        for (int i=split;i<npart;i++)pData_gpu[i-split]=(*pData)[i];
+//        (*pData).resize(split);
+        pic_gpu.fill(COLOUR(0,0,0));
+        pic_cpu.fill(COLOUR(0,0,0));
         tstack_pop("CUDA Init Vector");
 
-        std::thread gpu_render([mydevID, nTasksDev, &pic_gpu, &pData_gpu, campos, centerpos, lookat, sky, &amap, b_brightness, params]{
-                std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                cuda_rendering(mydevID, nTasksDev, pic_gpu, pData_gpu, campos, centerpos, lookat, sky, amap, b_brightness, params);
-                });
+        std::thread gpu_render([&mydevID, &nTasksDev, &pic_gpu, pData, split, npart, &campos, &centerpos, &lookat, &sky, &amap, &b_brightness, &params]
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            cuda_rendering(mydevID, nTasksDev, pic_gpu, *pData, split, npart, campos, centerpos, lookat, sky, amap, b_brightness, params);
+        });
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(42, &cpuset);
@@ -309,6 +313,8 @@ int main (int argc, const char **argv)
         int render_threads = params.find<int>("render_threads", 8);
         int threads = omp_get_max_threads();
         omp_set_num_threads(render_threads);
+        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        (*pData).resize(split);
         host_rendering(params, *pData, pic_cpu, campos, centerpos, lookat, sky, amap, b_brightness, npart_all);
         omp_set_num_threads(threads);
         tstack_push("CUDA Wait");
@@ -451,6 +457,7 @@ int main (int argc, const char **argv)
     planck_assert (!file_present("stop"),"stop file found");
     }
 
+  tstack_pop("Main while");
   if(!first)
   {
     MPI_Wait(&req, &status);
