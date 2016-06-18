@@ -312,12 +312,10 @@ void render_new (particle_sim *p, int npart, arr2<COLOUR> &pic,
 #else
   arr2<COLOUR> lpic(chunkdim,chunkdim);
 #endif
-  int chunk, flag=0, probe_num=0;
+  int chunk, probe_num=0;
 #pragma omp for schedule(dynamic,1)
   for (chunk=0; chunk<wd.nchunks(); ++chunk)
     {
-        if(omp_get_thread_num() == 0 && !flag && !first)
-            MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
     int x0, x1, y0, y1;
     wd.chunk_info(chunk,x0,x1,y0,y1);
     int x0s=x0, y0s=y0;
@@ -332,8 +330,6 @@ void render_new (particle_sim *p, int npart, arr2<COLOUR> &pic,
     wd.chunk_info_idx(chunk,cx,cy);
     for (tsize t=0; t<idx.size(); ++t)
       {
-            if(omp_get_thread_num() == 0 && !flag && !first)
-                MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
       const vector<uint32> &v(idx[t][cx][cy]);
 
       for (tsize m=0; m<v.size(); ++m)

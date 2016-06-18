@@ -146,11 +146,11 @@ void MPI_Manager::all2allv_easy_prep (tsize insz, const arr<int> &numin,
 
 MPI_Manager::MPI_Manager ()
   {
-  int flag;
+  int flag, provide;
   MPI_Initialized(&flag);
   if (!flag)
     {
-    MPI_Init(0,0);
+    MPI_Init_thread(0, 0, MPI_THREAD_MULTIPLE, &provide);
     MPI_Errhandler_set(LS_COMM, MPI_ERRORS_ARE_FATAL);
     }
   MPI_Comm_size(LS_COMM, &num_ranks_);
@@ -246,7 +246,7 @@ void MPI_Manager::iallreduceRawVoid (void *data, NDT type,
 void MPI_Manager::ireduceRawVoid (void *data, NDT type,
   tsize num, redOp op, MPI_Request *req, int root) const
   {
-      MPI_Ireduce (rank()==root?MPI_IN_PLACE:data,data,num,ndt2mpi(type),op2mop(op),root, LS_COMM, req); 
+      MPI_Reduce (rank()==root?MPI_IN_PLACE:data,data,num,ndt2mpi(type),op2mop(op),root, LS_COMM); 
   }
 void MPI_Manager::allreduceRawVoid (const void *in, void *out, NDT type,
   tsize num, redOp op) const

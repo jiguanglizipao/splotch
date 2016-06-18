@@ -2,8 +2,6 @@
 #define SPLOTCH_HOST_H
 
 #include "splotch/splotchutils.h"
-extern MPI_Request req;
-extern bool first;
 
 namespace host_funct {
 

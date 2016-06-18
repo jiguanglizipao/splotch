@@ -22,6 +22,8 @@
 #include <cmath>
 #include <cstdio>
 #include <algorithm>
+#include <thread>
+#include <omp.h>
 
 #ifdef SPLVISIVO
 #include "optionssetter.h"
@@ -36,7 +38,6 @@
 
 #ifdef CUDA
 #include "cuda/cuda_splotch.h"
-#include <thread>
 #endif
 #ifdef OPENCL
 #include "opencl/splotch_cuda2.h"
@@ -53,8 +54,6 @@
 #endif
 
 using namespace std;
-MPI_Request req;
-bool first=false;
 #ifdef SPLVISIVO
 int splotchMain (VisIVOServerOptions opt)
 #else
@@ -224,9 +223,8 @@ int main (int argc, const char **argv)
   int split;
   arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
   arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
-  std::vector<particle_sim> pData_gpu;
-  first=true;
-  MPI_Status status;
+  bool first=true;
+  std::thread *reduce = NULL, *output = NULL;
   
   sceneMaker sMaker(params);
   tstack_push("Main while");
@@ -301,19 +299,22 @@ int main (int argc, const char **argv)
         pic_cpu.fill(COLOUR(0,0,0));
         tstack_pop("CUDA Init Vector");
 
-        std::thread gpu_render([&mydevID, &nTasksDev, &pic_gpu, pData, split, npart, &campos, &centerpos, &lookat, &sky, &amap, &b_brightness, &params]
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            cuda_rendering(mydevID, nTasksDev, pic_gpu, *pData, split, npart, campos, centerpos, lookat, sky, amap, b_brightness, params);
-        });
+        int gpu_thread = params.find<int>("gpu_thread", 34);
+        std::thread gpu_render
+        (
+            [&mydevID, &nTasksDev, &pic_gpu, pData, split, npart, &campos, &centerpos, &lookat, &sky, &amap, &b_brightness, &params]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                cuda_rendering(mydevID, nTasksDev, pic_gpu, *pData, split, npart, campos, centerpos, lookat, sky, amap, b_brightness, params);
+            }
+        );
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(42, &cpuset);
+        CPU_SET(gpu_thread, &cpuset);
         pthread_setaffinity_np(gpu_render.native_handle(), sizeof(cpu_set_t), &cpuset);
         int render_threads = params.find<int>("render_threads", 8);
         int threads = omp_get_max_threads();
         omp_set_num_threads(render_threads);
-        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
         (*pData).resize(split);
         host_rendering(params, *pData, pic_cpu, campos, centerpos, lookat, sky, amap, b_brightness, npart_all);
         omp_set_num_threads(threads);
@@ -356,9 +357,31 @@ int main (int argc, const char **argv)
     }
 
     tstack_push("Post-processing");
-    if(!first)MPI_Wait(&req, &status);
+    if(!first)
+    {
+        reduce->join();
+        delete reduce;
+        reduce = NULL;
+    }
     pic.swap(pic2);
-    mpiMgr.iallreduceRaw(reinterpret_cast<float *>(&pic2[0][0]),3*xres*yres,MPI_Manager::Sum, &req);
+    int reduce_thread = params.find<int>("reduce_thread", 35);
+    reduce = new std::thread
+    (
+        [&pic2, xres, yres]
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            MPI_Status status;
+            MPI_Request req;
+            //mpiMgr.iallreduceRaw(reinterpret_cast<float *>(&pic2[0][0]),3*xres*yres,MPI_Manager::Sum, &req);
+            mpiMgr.ireduceRaw(reinterpret_cast<float *>(&pic2[0][0]),3*xres*yres,MPI_Manager::Sum, &req, 0);
+            //MPI_Wait(&req, &status);
+            //printf("Reduced\n");
+        }
+    );
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(reduce_thread, &cpuset);
+    pthread_setaffinity_np(reduce->native_handle(), sizeof(cpu_set_t), &cpuset);
 
     if(first)
     {
@@ -369,9 +392,12 @@ int main (int argc, const char **argv)
     }
     else
     {
+      //int threads = omp_get_max_threads();
+      //omp_set_num_threads(2*threads-2);
+      tstack_replace("Post-processing","Output");
       exptable<float32> xexp(-20.0);
       if (mpiMgr.master() && a_eq_e)
-  #pragma omp parallel for
+  #pragma omp parallel for 
         for (int ix=0;ix<xres;ix++)
           for (int iy=0;iy<yres;iy++)
             {
@@ -379,9 +405,6 @@ int main (int argc, const char **argv)
             pic[ix][iy].g=-xexp.expm1(pic[ix][iy].g);
             pic[ix][iy].b=-xexp.expm1(pic[ix][iy].b);
             }
-  
-      tstack_replace("Post-processing","Output");
-  
       if (master && params.find<bool>("colorbar",false))
         {
         cout << endl << "creating color bar ..." << endl;
@@ -412,35 +435,58 @@ int main (int argc, const char **argv)
           {
           cout << endl << "saving file " << outfile2 << " ..." << endl;
   
-          LS_Image img(pic.size1(),pic.size2());
+          LS_Image *img = new LS_Image(pic.size1(),pic.size2());
   
   #pragma omp parallel for
           for (tsize i=0; i<pic.size1(); ++i)
             for (tsize j=0; j<pic.size2(); ++j)
-              img.put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
+              img->put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
           int pictype = params.find<int>("pictype",0);
-          switch(pictype)
+
+          int output_thread = params.find<int>("output_thread", 33);
+          tstack_push("IO");
+          if(output)
+          {
+              output->join();
+              delete output;
+              output = NULL;
+          }
+          output = new std::thread
+          (
+            [pictype, img, outfile2]
             {
-            case 0:
-              img.write_TGA(outfile2+".tga");
-              break;
-            case 1:
-              planck_fail("ASCII PPM no longer supported");
-              break;
-            case 2:
-              img.write_PPM(outfile2+".ppm");
-              break;
-            case 3:
-              img.write_TGA_rle(outfile2+".tga");
-              break;
-            default:
-              planck_fail("No valid image file type given ...");
-              break;
+              std::this_thread::sleep_for(std::chrono::milliseconds(5));
+              switch(pictype)
+                {
+                case 0:
+                  img->write_TGA(outfile2+".tga");
+                  break;
+                case 1:
+                  planck_fail("ASCII PPM no longer supported");
+                  break;
+                case 2:
+                  img->write_PPM(outfile2+".ppm");
+                  break;
+                case 3:
+                  img->write_TGA_rle(outfile2+".tga");
+                  break;
+                default:
+                  planck_fail("No valid image file type given ...");
+                  break;
+                }
+              delete img;
             }
+          );
+          cpu_set_t cpuset;
+          CPU_ZERO(&cpuset);
+          CPU_SET(output_thread, &cpuset);
+          pthread_setaffinity_np(output->native_handle(), sizeof(cpu_set_t), &cpuset);
+          tstack_pop("IO");
           }
         }
   
       outfile2 = outfile;
+      //omp_set_num_threads(threads);
       tstack_pop("Output");
     }
 
@@ -451,7 +497,7 @@ int main (int argc, const char **argv)
   #endif
     timeReport();
 
-    mpiMgr.barrier();
+    //mpiMgr.barrier();
     // Abandon ship if a file named "stop" is found in the working directory.
     // ==>  Allows to stop rendering conveniently using a simple "touch stop".
     planck_assert (!file_present("stop"),"stop file found");
@@ -460,7 +506,11 @@ int main (int argc, const char **argv)
   tstack_pop("Main while");
   if(!first)
   {
-    MPI_Wait(&req, &status);
+    //int threads = omp_get_max_threads();
+    //omp_set_num_threads(2*threads-2);
+    reduce->join();
+    delete reduce;
+    reduce = NULL;
     pic.swap(pic2);
     tstack_push("Post-processing");
   
@@ -514,6 +564,12 @@ int main (int argc, const char **argv)
           for (tsize j=0; j<pic.size2(); ++j)
             img.put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
         int pictype = params.find<int>("pictype",0);
+        if(output)
+        {
+            output->join();
+            delete output;
+            output = NULL;
+        }
         switch(pictype)
           {
           case 0:
@@ -535,6 +591,7 @@ int main (int argc, const char **argv)
         }
       }
   
+    //omp_set_num_threads(threads);
     tstack_pop("Output");
   #if (defined(OPENCL))
     cuda_timeReport();
