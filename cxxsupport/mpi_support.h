@@ -340,9 +340,13 @@ class MPI_Manager
       redOp op) const
       { allreduceRawVoid (data, nativeType<T>(), num, op); }
     void iallreduceRawVoid (void *data, NDT type, tsize num, redOp op, MPI_Request *req) const;
+    void ireduceRawVoid (void *data, NDT type, tsize num, redOp op, MPI_Request *req, int root) const;
     template<typename T> void iallreduceRaw (T *data, tsize num,
       redOp op, MPI_Request *req) const
       { iallreduceRawVoid (data, nativeType<T>(), num, op, req); }
+    template<typename T> void ireduceRaw (T *data, tsize num,
+      redOp op, MPI_Request *req, int root) const
+      { ireduceRawVoid (data, nativeType<T>(), num, op, req, root); }
     template<typename T> void allreduce (arr<T> &data, redOp op) const
       { allreduceRaw (&data[0], data.size(), op); }
     template<typename T> void allreduce (std::vector<T> &data, redOp op) const

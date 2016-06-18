@@ -42,13 +42,6 @@
 
 
 extern float split_r;
-struct render_split
-{
-    __host__ __device__ bool operator()(const particle_sim &a)
-    {
-        return a.r < split_r;
-    }
-};
 // Use atomics for image update instead of layered update in k_renderC2
 //#define CUDA_ATOMIC_TILE_UPDATE
 

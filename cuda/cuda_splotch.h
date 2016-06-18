@@ -44,7 +44,7 @@ void print_device_info(int rank, int dev);
 template <typename T>
 size_t split_particle(T start, T end)
 {
-    return thrust::partition(thrust::omp::par, start, end, render_split()) - start;
+    return thrust::partition(thrust::omp::par, start, end, [](const particle_sim &a){return a.r < split_r;}) - start;
 }
 
 #endif
