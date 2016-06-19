@@ -113,21 +113,53 @@ void cu_get_trans_params(cu_param &para_trans, paramfile &params, const vec3 &ca
   para_trans.rfac=rfac;
 }
 
+#ifdef ENABLE_KEEP_ORIG
+int cu_init_orig(cu_gpu_vars *pgv, long int nP, cu_particle_sim *part)
+{
+    CLEAR_MEM(pgv->d_orig);
+    cudaError_t error;
+    size_t size = nP * sizeof(cu_particle_sim);
+    error = cudaMalloc((void**) &pgv->d_orig, size);
+    if (error != cudaSuccess) 
+    {
+        cout << "device memory: orig_particle data allocation error!" << endl;
+        return 1;
+    }
+    error = cudaMemcpy(pgv->d_orig, part, size, cudaMemcpyHostToDevice);
+    if (error != cudaSuccess)
+    {
+        cout << "Device Memory: orig_particle data copy error!" << endl;
+        printf("cudaMemcpy returned: %s\n",cudaGetErrorString(error));
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 int cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fparams, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, float b_brightness, bool& doLogs)
 {
   cudaError_t error;
-  //cudaSetDevice (devID); // initialize cuda runtime
+  cudaSetDevice (devID); // initialize cuda runtime
  
   // particle vector  
   size_t size = nP * sizeof(cu_particle_sim);
   error = cudaMalloc((void**) &pgv->d_pd, size);
   if (error != cudaSuccess) 
   {
-   cout << "Device Memory: particle data allocation error!" << endl;
+   cout << "device memory: particle data allocation error!" << endl;
    return 1;
   }
+#ifdef ENABLE_KEEP_ORIG
   cudaMemset(pgv->d_pd,0,size);
+  size = nP * sizeof(cu_particle_sim);
+  error = cudaMalloc((void**) &pgv->d_bak, size);
+  if (error != cudaSuccess) 
+  {
+   cout << "device memory: particle data allocation error!" << endl;
+   return 1;
+  }
+  cudaMemset(pgv->d_bak,0,size);
+#endif
 
 #ifdef ENABLE_RENDER_POS
   //sum vector
@@ -325,7 +357,27 @@ int cu_copy_particles_to_device(cu_particle_sim* h_pd, unsigned int n, cu_gpu_va
   return 0;
 }
 
- 
+#ifdef ENABLE_KEEP_ORIG
+int cu_periodic(cu_gpu_vars *pgv, cu_particle_sim *part, int nP, double boxsize, double x, double y, double z)
+{
+  dim3 dimGrid, dimBlock;
+  pgv->policy->GetDimsBlockGrid(nP, &dimGrid, &dimBlock);
+  k_periodic<<<dimGrid,dimBlock>>>(nP, part, boxsize, boxsize/2, x, y, z);
+}
+int cu_copy_particles_device_to_device(cu_particle_sim* d_pd, cu_particle_sim* h_pd, unsigned int n)
+{
+  cudaError_t error;
+  size_t size = n*sizeof(cu_particle_sim);
+  error = cudaMemcpy(d_pd, h_pd, size, cudaMemcpyDeviceToDevice);
+  if (error != cudaSuccess)
+  {
+   cout << "Device Memory: particle data copy error!" << endl;
+   printf("cudaMemcpy returned: %s\n",cudaGetErrorString(error));
+   return 1;
+  }
+  return 0;
+}
+#endif
 int cu_range(int nP, cu_gpu_vars* pgv)
 {
   // Get block and grid dimensions from policy object
@@ -484,6 +536,10 @@ void cu_end(cu_gpu_vars* pgv)
   CLEAR_MEM((pgv->d_pd));
   CLEAR_MEM((pgv->d_pic));
 
+#ifdef ENABLE_KEEP_ORIG
+  CLEAR_MEM((pgv->d_bak));
+#endif
+
 #ifdef ENABLE_RENDER_POS
   CLEAR_MEM((pgv->sum));
   CLEAR_MEM((pgv->pos));
@@ -509,7 +565,9 @@ void cu_end(cu_gpu_vars* pgv)
 #endif
 
   delete pgv->policy;
+#ifndef ENABLE_KEEP_ORIG
   cudaDeviceReset();
+#endif
 }
 
 long int cu_get_chunk_particle_count(cu_gpu_vars* pgv, int nTasksDev, size_t psize, int ntiles, float pfactor)

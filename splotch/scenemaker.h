@@ -75,7 +75,7 @@ class sceneMaker
 #ifdef CUDA
   bool getNextScene (std::vector<particle_sim> &particle_data,
       std::vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos,
-      vec3 &lookat, vec3 &sky, std::string &outfile, int &split);
+      vec3 &lookat, vec3 &sky, std::string &outfile, int &split, double &box_size);
 #else
   bool getNextScene (std::vector<particle_sim> &particle_data,
       std::vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos,

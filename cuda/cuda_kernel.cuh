@@ -18,6 +18,9 @@ __device__ __forceinline__ void clamp (float minv, float maxv, float &val);
 __device__ __forceinline__ double my_asinh (double val);
 __device__ __forceinline__ cu_color get_color(int ptype, float val, int map_size, int map_ptypes);
 __global__ void k_range(int nP, cu_particle_sim *p);
+#ifdef ENABLE_KEEP_ORIG
+__global__ void k_periodic(int nP, cu_particle_sim *part, float boxsize, float boxhalf, float lookatx, float lookaty, float lookatz);
+#endif
 
 // Implementation specific kernels 
 #if !defined(CUDA_FULL_ATOMICS) 

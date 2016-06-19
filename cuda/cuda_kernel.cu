@@ -231,6 +231,28 @@ __global__ void k_process(cu_particle_sim *p, int n, int mapSize, int types)
 
 }
  
+#ifdef ENABLE_KEEP_ORIG
+__global__ void k_periodic(int nP, cu_particle_sim *part, float boxsize, float boxhalf, float lookatx, float lookaty, float lookatz)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= nP)return;
+    cu_particle_sim &p = part[idx];
+    if(p.x - lookatx > boxhalf)
+        p.x -= boxsize;
+    if(lookatx - p.x > boxhalf)
+        p.x += boxsize;
+    if(p.y - lookaty > boxhalf)
+        p.y -= boxsize;
+    if(lookaty - p.y > boxhalf)
+        p.y += boxsize;
+    if(p.z - lookatz > boxhalf)
+        p.z -= boxsize;
+    if(lookatz - p.z > boxhalf)
+        p.z += boxsize;
+    //if(idx < 10)printf("GPU %d %f %f %f\n", idx, part[idx].x, part[idx].y, part[idx].z);
+}
+#endif
+
 // Calculates logs, asinh is commented out because if it is used
 // it is done on host
 __global__ void k_range(int nP, cu_particle_sim *p)

@@ -52,7 +52,9 @@ int cu_draw_chunk(int mydevID, cu_particle_sim *d_particle_data, int nParticle, 
 
   // Copy data particle to device memory
   //tstack_push("Data copy");
+#ifndef ENABLE_KEEP_ORIG
   cu_copy_particles_to_device(d_particle_data, nParticle, gv);
+#endif
   //tstack_pop("Data copy");
 
   // Get parameters for rendering

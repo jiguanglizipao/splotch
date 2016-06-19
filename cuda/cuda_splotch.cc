@@ -23,8 +23,11 @@
 
 using namespace std;
 
-void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<particle_sim> &particle, int split, int npart, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, vector<COLOURMAP> &amap, float b_brightness, paramfile &g_params)
+void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<particle_sim> &particle, int split, int npart, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, vector<COLOURMAP> &amap, float b_brightness, paramfile &g_params, double boxsize)
 {
+#ifdef ENABLE_KEEP_ORIG
+    vec3 lookat_bak = lookat;
+#endif
   //tstack_push("CUDA");
   //tstack_push("Device setup");
   cudaSetDevice (mydevID); // initialize cuda runtime
@@ -55,8 +58,13 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
 #endif
 
   // Initialise struct to hold gpu-destined variables
+#ifdef ENABLE_KEEP_ORIG
+  static cu_gpu_vars gv;
+  if(!gv.d_orig)cu_init_orig(&gv, nP, (cu_particle_sim*)&particle[split]);
+#else
   cu_gpu_vars gv;
   memset(&gv, 0, sizeof(cu_gpu_vars));
+#endif
   gv.policy = policy;
 
   // Setup gpu colormap
@@ -86,6 +94,7 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
     int endP = 0;
     int startP = 0;
     int nPR = 0;
+    bool periodic = g_params.find<bool>("periodic", true);
 
     // Loop over chunks of particles as big as we can fit in dev mem
     while(endP < nP)
@@ -93,8 +102,21 @@ void cuda_rendering(int mydevID, int nTasksDev, arr2<COLOUR> &pic, vector<partic
       // Set range and draw first chunk
       endP = startP + len;
       if (endP > nP) endP = nP;
+
+#ifdef ENABLE_KEEP_ORIG
+      //cu_copy_particles_to_device((cu_particle_sim *) &(particle[startP+split]), endP-startP, &gv);
+      //printf("%d %d %d\n", startP, endP, endP-startP);
+      cu_copy_particles_device_to_device(gv.d_bak, gv.d_orig+startP, endP-startP);
+      if(periodic)cu_periodic(&gv, gv.d_orig+startP, endP-startP, boxsize, lookat_bak.x, lookat_bak.y, lookat_bak.z);
+      cu_copy_particles_device_to_device(gv.d_pd, gv.d_orig+startP, endP-startP);
+      //if(periodic)cu_periodic(&gv, gv.d_pd, endP-startP, boxsize, lookat_bak.x, lookat_bak.y, lookat_bak.z);
+      //cudaDeviceSynchronize();
+      nPR += cu_draw_chunk(mydevID, gv.d_orig+startP, endP-startP, Pic_host, &gv, a_eq_e, grayabsorb, xres, yres, doLogs);
+      cu_copy_particles_device_to_device(gv.d_orig+startP, gv.d_bak, endP-startP);
+#else
       nPR += cu_draw_chunk(mydevID, (cu_particle_sim *) &(particle[startP+split]), endP-startP, Pic_host, &gv, a_eq_e, grayabsorb, xres, yres, doLogs);
-      
+#endif
+
 #ifndef CUDA_FULL_ATOMICS
       // Combine host render of large particles to final image
       // No need to do this for atomic implementation

@@ -230,7 +230,8 @@ int main (int argc, const char **argv)
   tstack_push("Main while");
 #ifdef CUDA
   split_r = params.find<float>("split_r", 0.0);
-  while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile, split))
+  double boxsize;
+  while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile, split, boxsize))
 #else
   while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile))
 #endif
@@ -285,7 +286,7 @@ int main (int argc, const char **argv)
 #ifdef ONLY_CUDA
         if (!a_eq_e) planck_fail("CUDA only supported for A==E so far");
         tstack_push("CUDA");
-        cuda_rendering(mydevID, nTasksDev, pic, *pData, campos, centerpos, lookat, sky, amap, b_brightness, params);
+        cuda_rendering(mydevID, nTasksDev, pic, *pData, campos, centerpos, lookat, sky, amap, b_brightness, params, boxsize);
         tstack_pop("CUDA");
 #else
         tstack_push("CUDA");
@@ -302,10 +303,10 @@ int main (int argc, const char **argv)
         int gpu_thread = params.find<int>("gpu_thread", 34);
         std::thread gpu_render
         (
-            [&mydevID, &nTasksDev, &pic_gpu, pData, split, npart, &campos, &centerpos, &lookat, &sky, &amap, &b_brightness, &params]
+            [&mydevID, &nTasksDev, &pic_gpu, pData, split, npart, &campos, &centerpos, &lookat, &sky, &amap, &b_brightness, &params, boxsize]
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                cuda_rendering(mydevID, nTasksDev, pic_gpu, *pData, split, npart, campos, centerpos, lookat, sky, amap, b_brightness, params);
+                cuda_rendering(mydevID, nTasksDev, pic_gpu, *pData, split, npart, campos, centerpos, lookat, sky, amap, b_brightness, params, boxsize);
             }
         );
         cpu_set_t cpuset;

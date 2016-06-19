@@ -116,6 +116,9 @@ struct cu_gpu_vars
   // Core vars
   CuPolicy            *policy;
   cu_particle_sim     *d_pd;             // Device ptr to device particle data
+#ifdef ENABLE_KEEP_ORIG
+  cu_particle_sim     *d_orig, *d_bak;
+#endif
   cu_color            *d_pic;
   int                 colormap_size;
   int                 colormap_ptypes;
@@ -147,6 +150,10 @@ void      cu_get_trans_params(cu_param &para_trans, paramfile &params, const vec
 int       cu_init(int devID, long int nP, int ntiles, cu_gpu_vars* pgv, paramfile &fparams, const vec3 &campos, const vec3 &centerpos, const vec3 &lookat, vec3 &sky, float b_brightness, bool& doLogs);
 void      cu_init_colormap(cu_colormap_info info, cu_gpu_vars* pgv);
 int       cu_copy_particles_to_device(cu_particle_sim* h_pd, unsigned int n, cu_gpu_vars* pgv);
+#ifdef ENABLE_KEEP_ORIG
+int cu_copy_particles_device_to_device(cu_particle_sim* d_pd, cu_particle_sim* h_pd, unsigned int n);
+int cu_periodic(cu_gpu_vars* pgv, cu_particle_sim *part, int nP, double boxsize, double x, double y, double z);
+#endif
 int       cu_range(int nP, cu_gpu_vars* pgv);
 
 #ifndef CUDA_FULL_ATOMICS
@@ -163,6 +170,9 @@ void cu_render(int nP, cu_gpu_vars* pgv);
 #ifdef ENABLE_RENDER_POS
 void cu_getsum(int nP, cu_gpu_vars* pgv);
 void cu_getpos(int nP, cu_gpu_vars* pgv);
+#endif
+#ifdef ENABLE_KEEP_ORIG
+int cu_init_orig(cu_gpu_vars *pgv, long int nP, cu_particle_sim *part);
 #endif
 #ifdef ENABLE_RENDER_SM
 void cu_getsum(int nP, cu_gpu_vars* pgv);

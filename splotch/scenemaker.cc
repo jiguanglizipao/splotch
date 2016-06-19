@@ -1029,7 +1029,7 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
 #ifdef CUDA
 bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
   vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos, vec3 &lookat, vec3 &sky,
-  string &outfile, int &split)
+  string &outfile, int &split, double &box_size)
 #else
 bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
   vector<particle_sim> &r_points, vec3 &campos, vec3 &centerpos, vec3 &lookat, vec3 &sky,
@@ -1086,7 +1086,11 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
 
   if (params.find<bool>("periodic",true))
     {
+#if (defined CUDA) && (defined ENABLE_KEEP_ORIG)
+    int npart = split_data;//particle_data.size();
+#else
     int npart = particle_data.size();
+#endif
     double boxhalf = boxsize / 2;
 
     if(mpiMgr.master())
@@ -1111,6 +1115,24 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
         particle_data[m].z += boxsize;
       }
 }
+//    for (int m=npart; m<npart+100; ++m)
+//      {
+//         particle_sim t = particle_data[m]; 
+//      if(particle_data[m].x - lookat.x > boxhalf)
+//        particle_data[m].x -= boxsize;
+//      if(lookat.x - particle_data[m].x > boxhalf)
+//        particle_data[m].x += boxsize;
+//      if(particle_data[m].y - lookat.y > boxhalf)
+//        particle_data[m].y -= boxsize;
+//      if(lookat.y - particle_data[m].y > boxhalf)
+//        particle_data[m].y += boxsize;
+//      if(particle_data[m].z - lookat.z > boxhalf)
+//        particle_data[m].z -= boxsize;
+//      if(lookat.z - particle_data[m].z > boxhalf)
+//        particle_data[m].z += boxsize;
+//        printf("CPU %d %lf %lf %lf\n", m-npart, particle_data[m].x, particle_data[m].y, particle_data[m].z);
+//        particle_data[m] = t;
+//      }
   }
 
   // Let's try to boost!!!
@@ -1138,6 +1160,7 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
     }
 #ifdef CUDA
     split = split_data;
+    box_size = boxsize;
 #endif
   tstack_pop("getNextScene");
   return true;
