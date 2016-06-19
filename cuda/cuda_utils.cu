@@ -116,7 +116,6 @@ void cu_get_trans_params(cu_param &para_trans, paramfile &params, const vec3 &ca
 #ifdef ENABLE_KEEP_ORIG
 int cu_init_orig(cu_gpu_vars *pgv, long int nP, cu_particle_sim *part)
 {
-    CLEAR_MEM(pgv->d_orig);
     cudaError_t error;
     size_t size = nP * sizeof(cu_particle_sim);
     error = cudaMalloc((void**) &pgv->d_orig, size);

@@ -296,11 +296,11 @@ int main (int argc, const char **argv)
 //        #pragma omp parallel for
 //        for (int i=split;i<npart;i++)pData_gpu[i-split]=(*pData)[i];
 //        (*pData).resize(split);
-        pic_gpu.fill(COLOUR(0,0,0));
-        pic_cpu.fill(COLOUR(0,0,0));
+//        pic_gpu.fill(COLOUR(0,0,0));
+//        pic_cpu.fill(COLOUR(0,0,0));
         tstack_pop("CUDA Init Vector");
 
-        int gpu_thread = params.find<int>("gpu_thread", 34);
+        int gpu_thread = params.find<int>("gpu_thread", 42);
         std::thread gpu_render
         (
             [&mydevID, &nTasksDev, &pic_gpu, pData, split, npart, &campos, &centerpos, &lookat, &sky, &amap, &b_brightness, &params, boxsize]
@@ -365,7 +365,7 @@ int main (int argc, const char **argv)
         reduce = NULL;
     }
     pic.swap(pic2);
-    int reduce_thread = params.find<int>("reduce_thread", 35);
+    int reduce_thread = params.find<int>("reduce_thread", 43);
     reduce = new std::thread
     (
         [&pic2, xres, yres]
@@ -444,7 +444,7 @@ int main (int argc, const char **argv)
               img->put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
           int pictype = params.find<int>("pictype",0);
 
-          int output_thread = params.find<int>("output_thread", 33);
+          int output_thread = params.find<int>("output_thread", 41);
           tstack_push("IO");
           if(output)
           {

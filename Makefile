@@ -141,7 +141,7 @@ ifeq ($(SYSTYPE),"Linux-cluster")
    CC  = icpc
   endif
   OPTIMIZE += -g -w -UONLY_CUDA -DENABLE_KEEP_ORIG -DENABLE_RENDER_SM -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS -Ofast -march=native -ipo#-march=core-avx2 -xCORE-AVX2 -mtune=core-avx2
-  OMP = -qopenmp -lmpiP
+  OMP = -qopenmp #-lmpiP
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
   CUDA_HOME = /usr/local/cuda-8.0
   NVCC = nvcc
