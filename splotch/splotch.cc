@@ -216,11 +216,11 @@ int main (int argc, const char **argv)
 #endif
 
   tstack_pop("Setup");
-  string outfile, outfile2, outfile_n;
+  string outfile, outfile2, outfile3, outfile_n;
   bool a_eq_e = params.find<bool>("a_eq_e",true);
   int xres = params.find<int>("xres",800),
       yres = params.find<int>("yres",xres);
-  arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
+  arr2<COLOUR> pic(xres,yres), pic2(xres,yres), pic3(xres,yres);
   bool first=true, ndone = false;
   vector<particle_sim> particle_data_n, r_points_n;
   vec3 campos_n, centerpos_n, lookat_n, sky_n;
@@ -234,10 +234,12 @@ int main (int argc, const char **argv)
   double boxsize, boxsize_n;
   int split, split_n;
   arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
+  tstack_push("getNextScene");
   ndone = sMaker.getNextScene (particle_data_n, r_points_n, campos_n, centerpos_n, lookat_n, sky_n, outfile_n, split_n, boxsize_n);
 #else
   ndone = sMaker.getNextScene (particle_data_n, r_points_n, campos_n, centerpos_n, lookat_n, sky_n, outfile_n);
 #endif
+  tstack_pop("getNextScene");
   while(true)
     {
     tstack_push("getNextScene");
@@ -406,10 +408,13 @@ int main (int argc, const char **argv)
     tstack_push("Post-processing");
     if(!first)
     {
+        tstack_push("Reduce");
         reduce->join();
         delete reduce;
         reduce = NULL;
+        tstack_pop("Reduce");
     }
+    tstack_push("Reduce");
     pic.swap(pic2);
     int reduce_thread = params.find<int>("reduce_thread", 3);
     reduce = new std::thread
@@ -429,6 +434,9 @@ int main (int argc, const char **argv)
     CPU_ZERO(&cpuset);
     CPU_SET(reduce_thread, &cpuset);
     pthread_setaffinity_np(reduce->native_handle(), sizeof(cpu_set_t), &cpuset);
+    tstack_pop("Reduce");
+
+    outfile3 = outfile2;
 
     if(first)
     {
@@ -439,104 +447,108 @@ int main (int argc, const char **argv)
     }
     else
     {
-      //int threads = omp_get_max_threads();
-      //omp_set_num_threads(2*threads-2);
-      tstack_replace("Post-processing","Output");
-      exptable<float32> xexp(-20.0);
-      if (mpiMgr.master() && a_eq_e)
-  #pragma omp parallel for 
-        for (int ix=0;ix<xres;ix++)
-          for (int iy=0;iy<yres;iy++)
-            {
-            pic[ix][iy].r=-xexp.expm1(pic[ix][iy].r);
-            pic[ix][iy].g=-xexp.expm1(pic[ix][iy].g);
-            pic[ix][iy].b=-xexp.expm1(pic[ix][iy].b);
-            }
-      if (master && params.find<bool>("colorbar",false))
-        {
-        cout << endl << "creating color bar ..." << endl;
-        add_colorbar(params,pic,amap);
-        }
-  
-      double gamma=params.find<double>("pic_gamma",1.0);
-      double helligkeit=params.find<double>("pic_brighness",0.0);
-      double kontrast=params.find<double>("pic_contrast",1.0);
-  
-      if (master && (gamma != 1.0 || helligkeit != 0.0 || kontrast != 1.0))
-        {
-  	cout << endl << "immage enhancement (gamma,brightness,contrast) = ("
-  	     << gamma << "," << helligkeit << "," << kontrast << ")" << endl;
-  #pragma omp parallel for
-          for (tsize i=0; i<pic.size1(); ++i)
-            for (tsize j=0; j<pic.size2(); ++j)
-  	    {
-  	      pic[i][j].r = kontrast * pow((double)pic[i][j].r,gamma) + helligkeit;
-                pic[i][j].g = kontrast * pow((double)pic[i][j].g,gamma) + helligkeit;
-                pic[i][j].b = kontrast * pow((double)pic[i][j].b,gamma) + helligkeit;
-  	    }
-         }
-  
-      if(!params.find<bool>("AnalyzeSimulationOnly"))
-        {
-        if (master)
-          {
-          cout << endl << "saving file " << outfile2 << " ..." << endl;
-  
-          LS_Image *img = new LS_Image(pic.size1(),pic.size2());
-  
-  #pragma omp parallel for
-          for (tsize i=0; i<pic.size1(); ++i)
-            for (tsize j=0; j<pic.size2(); ++j)
-              img->put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
-          int pictype = params.find<int>("pictype",0);
+      if (master)
+      {
 
-          int output_thread = params.find<int>("output_thread", 5);
-          tstack_push("IO");
-          if(output)
+      int output_thread = params.find<int>("output_thread", 5);
+      if(output)
+      {
+          tstack_push("Output");
+          output->join();
+          delete output;
+          output = NULL;
+          tstack_pop("Output");
+      }
+      pic.swap(pic3);
+      output = new std::thread
+      (
+        [&pic3, &a_eq_e, &xres, &yres, &params, &outfile3, &amap]
+        {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        arr2<COLOUR> &pic=pic3;
+        string &outfile2=outfile3;
+  
+        exptable<float32> xexp(-20.0);
+        //cout<<"Checkpoint 0"<<endl;
+        if (a_eq_e)
+        {
+          for (int ix=0;ix<xres;ix++)
+            for (int iy=0;iy<yres;iy++)
+              {
+              //cout<<"Test"<<endl;
+              pic[ix][iy].r=-xexp.expm1(pic[ix][iy].r);
+              pic[ix][iy].g=-xexp.expm1(pic[ix][iy].g);
+              pic[ix][iy].b=-xexp.expm1(pic[ix][iy].b);
+              }
+        }
+        //cout<<"Checkpoint 1"<<endl;
+        if (params.find<bool>("colorbar",false))
           {
-              output->join();
-              delete output;
-              output = NULL;
+          cout << endl << "creating color bar ..." << endl;
+          add_colorbar(params,pic,amap);
           }
-          output = new std::thread
-          (
-            [pictype, img, outfile2]
-            {
-              std::this_thread::sleep_for(std::chrono::milliseconds(5));
-              switch(pictype)
-                {
-                case 0:
-                  img->write_TGA(outfile2+".tga");
-                  break;
-                case 1:
-                  planck_fail("ASCII PPM no longer supported");
-                  break;
-                case 2:
-                  img->write_PPM(outfile2+".ppm");
-                  break;
-                case 3:
-                  img->write_TGA_rle(outfile2+".tga");
-                  break;
-                default:
-                  planck_fail("No valid image file type given ...");
-                  break;
-                }
-              delete img;
-            }
-          );
-          cpu_set_t cpuset;
-          CPU_ZERO(&cpuset);
-          CPU_SET(output_thread, &cpuset);
-          pthread_setaffinity_np(output->native_handle(), sizeof(cpu_set_t), &cpuset);
-          tstack_pop("IO");
+        //cout<<"Checkpoint 2"<<endl;
+        double gamma=params.find<double>("pic_gamma",1.0);
+        double helligkeit=params.find<double>("pic_brighness",0.0);
+        double kontrast=params.find<double>("pic_contrast",1.0);
+    
+        if ((gamma != 1.0 || helligkeit != 0.0 || kontrast != 1.0))
+        {
+    	    cout << endl << "immage enhancement (gamma,brightness,contrast) = ("
+    	         << gamma << "," << helligkeit << "," << kontrast << ")" << endl;
+          for (tsize i=0; i<pic.size1(); ++i)
+            for (tsize j=0; j<pic.size2(); ++j)
+    	      {
+    	        pic[i][j].r = kontrast * pow((double)pic[i][j].r,gamma) + helligkeit;
+              pic[i][j].g = kontrast * pow((double)pic[i][j].g,gamma) + helligkeit;
+              pic[i][j].b = kontrast * pow((double)pic[i][j].b,gamma) + helligkeit;
+    	      }
+        }
+        //cout<<"Checkpoint 3"<<endl;
+        if(!params.find<bool>("AnalyzeSimulationOnly"))
+          {
+            cout << endl << "saving file " << outfile2 << " ..." << endl;
+    
+            LS_Image *img = new LS_Image(pic.size1(),pic.size2());
+            
+            for (tsize i=0; i<pic.size1(); ++i)
+              for (tsize j=0; j<pic.size2(); ++j)
+                img->put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
+            
+            int pictype = params.find<int>("pictype",0);
+  
+                switch(pictype)
+                  {
+                  case 0:
+                    img->write_TGA(outfile2+".tga");
+                    break;
+                  case 1:
+                    planck_fail("ASCII PPM no longer supported");
+                    break;
+                  case 2:
+                    img->write_PPM(outfile2+".ppm");
+                    break;
+                  case 3:
+                    img->write_TGA_rle(outfile2+".tga");
+                    break;
+                  default:
+                    planck_fail("No valid image file type given ...");
+                    break;
+                  }
+                delete img;
           }
         }
-  
+      );
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(output_thread, &cpuset);
+      pthread_setaffinity_np(output->native_handle(), sizeof(cpu_set_t), &cpuset);
+      }
+      
       outfile2 = outfile;
       //omp_set_num_threads(threads);
-      tstack_pop("Output");
+      tstack_pop("Post-processing");
     }
-
 
   // Also meant to happen when using CUDA - unimplemented.
   #if (defined(OPENCL))
