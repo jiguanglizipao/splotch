@@ -216,27 +216,73 @@ int main (int argc, const char **argv)
 #endif
 
   tstack_pop("Setup");
-  string outfile, outfile2;
+  string outfile, outfile2, outfile_n;
   bool a_eq_e = params.find<bool>("a_eq_e",true);
   int xres = params.find<int>("xres",800),
       yres = params.find<int>("yres",xres);
-  int split;
   arr2<COLOUR> pic(xres,yres), pic2(xres,yres);
-  arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
-  bool first=true;
-  std::thread *reduce = NULL, *output = NULL;
+  bool first=true, ndone = false;
+  vector<particle_sim> particle_data_n, r_points_n;
+  vec3 campos_n, centerpos_n, lookat_n, sky_n;
+  std::thread *reduce = NULL, *output = NULL, *input = NULL;
   
+  int input_thread = params.find<int>("input_thread", 1);
   sceneMaker sMaker(params);
   tstack_push("Main while");
 #ifdef CUDA
   split_r = params.find<float>("split_r", 0.0);
-  double boxsize;
-  while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile, split, boxsize))
+  double boxsize, boxsize_n;
+  int split, split_n;
+  arr2<COLOUR> pic_cpu(xres,yres), pic_gpu(xres,yres);
+  ndone = sMaker.getNextScene (particle_data_n, r_points_n, campos_n, centerpos_n, lookat_n, sky_n, outfile_n, split_n, boxsize_n);
 #else
-  while (sMaker.getNextScene (particle_data, r_points, campos, centerpos, lookat, sky, outfile))
+  ndone = sMaker.getNextScene (particle_data_n, r_points_n, campos_n, centerpos_n, lookat_n, sky_n, outfile_n);
 #endif
+  while(true)
     {
+    tstack_push("getNextScene");
+    if(input)input->join();
+    if(!ndone)
+    {
+        tstack_pop("getNextScene");
+        break;
+    }
+    std::swap(particle_data, particle_data_n);
+    std::swap(r_points, r_points_n);
+    std::swap(campos, campos_n);
+    std::swap(centerpos, centerpos_n);
+    std::swap(lookat, lookat_n);
+    std::swap(sky, sky_n);
+    std::swap(outfile, outfile_n);
+#ifdef CUDA
+    std::swap(split, split_n);
+    std::swap(boxsize, boxsize_n);
+    input = new std::thread
+      (
+           [&sMaker, &ndone, &particle_data_n, &r_points_n, &campos_n, &centerpos_n, &lookat_n, &sky_n, &outfile_n, &split_n, &boxsize_n]
+           {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                  ndone = sMaker.getNextScene (particle_data_n, r_points_n, campos_n, centerpos_n, lookat_n, sky_n, outfile_n, split_n, boxsize_n);
+           }
+      );
+#else
+    input = new std::thread
+      (
+           [&sMaker, &ndone, &particle_data_n, &r_points_n, &campos_n, &centerpos_n, &lookat_n, &sky_n, &outfile_n]
+           {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                  ndone = sMaker.getNextScene (particle_data_n, r_points_n, campos_n, centerpos_n, lookat_n, sky_n, outfile_n);
+           }
+      );
+#endif
+    cpu_set_t icpuset;
+    CPU_ZERO(&icpuset);
+    CPU_SET(input_thread, &icpuset);
+    pthread_setaffinity_np(input->native_handle(), sizeof(cpu_set_t), &icpuset);
 
+    tstack_pop("getNextScene");
+
+    
     bool background = params.find<bool>("background",false);
     pic.fill(COLOUR(0,0,0));
     if(background)
@@ -365,7 +411,7 @@ int main (int argc, const char **argv)
         reduce = NULL;
     }
     pic.swap(pic2);
-    int reduce_thread = params.find<int>("reduce_thread", 43);
+    int reduce_thread = params.find<int>("reduce_thread", 3);
     reduce = new std::thread
     (
         [&pic2, xres, yres]
@@ -444,7 +490,7 @@ int main (int argc, const char **argv)
               img->put_pixel(i,j,Colour(pic[i][j].r,pic[i][j].g,pic[i][j].b));
           int pictype = params.find<int>("pictype",0);
 
-          int output_thread = params.find<int>("output_thread", 41);
+          int output_thread = params.find<int>("output_thread", 5);
           tstack_push("IO");
           if(output)
           {

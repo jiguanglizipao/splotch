@@ -761,13 +761,13 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
   if (scenes[cur_scene].reuse_particles)
     {
 
-  tstack_push("Copy");
+  //tstack_push("Copy");
     particle_data.resize(p_orig.size());
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i=0;i<p_orig.size();i++)particle_data[i]=p_orig[i];
     //memcpy(&particle_data[0], &p_orig[0], p_orig.size()*sizeof(particle_sim));
     //particle_data=p_orig;
-  tstack_pop("Copy");
+  //tstack_pop("Copy");
     return;
     }
   tstack_push("Input");
@@ -1038,7 +1038,6 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
   {
   if (tsize(++cur_scene) >= scenes.size()) return false;
 
-  tstack_push("getNextScene");
   const scene &scn=scenes[cur_scene];
 
   // patch the params object with parameter values relevant to the current scene
@@ -1095,10 +1094,10 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
 
     if(mpiMgr.master())
       cout << " doing parallel box wrap " << boxsize << endl;
-#pragma omp parallel
+//#pragma omp parallel
 {
     int m;
-#pragma omp for schedule(guided,1000)
+//#pragma omp for schedule(guided,1000)
     for (m=0; m<npart; ++m)
       {
       if(particle_data[m].x - lookat.x > boxhalf)
@@ -1115,24 +1114,6 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
         particle_data[m].z += boxsize;
       }
 }
-//    for (int m=npart; m<npart+100; ++m)
-//      {
-//         particle_sim t = particle_data[m]; 
-//      if(particle_data[m].x - lookat.x > boxhalf)
-//        particle_data[m].x -= boxsize;
-//      if(lookat.x - particle_data[m].x > boxhalf)
-//        particle_data[m].x += boxsize;
-//      if(particle_data[m].y - lookat.y > boxhalf)
-//        particle_data[m].y -= boxsize;
-//      if(lookat.y - particle_data[m].y > boxhalf)
-//        particle_data[m].y += boxsize;
-//      if(particle_data[m].z - lookat.z > boxhalf)
-//        particle_data[m].z -= boxsize;
-//      if(lookat.z - particle_data[m].z > boxhalf)
-//        particle_data[m].z += boxsize;
-//        printf("CPU %d %lf %lf %lf\n", m-npart, particle_data[m].x, particle_data[m].y, particle_data[m].z);
-//        particle_data[m] = t;
-//      }
   }
 
   // Let's try to boost!!!
@@ -1162,7 +1143,6 @@ bool sceneMaker::getNextScene (vector<particle_sim> &particle_data,
     split = split_data;
     box_size = boxsize;
 #endif
-  tstack_pop("getNextScene");
   return true;
   }
 
