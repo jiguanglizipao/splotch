@@ -20,7 +20,7 @@ OPT += -DUSE_MPI
 OPT += -DUSE_MPIIO
 
 #--------------------------------------- CUDA options
-#OPT += -DCUDA
+OPT += -DCUDA
 #OPT += -DHYPERQ
 
 #--------------------------------------- OpenCL options
@@ -140,13 +140,13 @@ ifeq ($(SYSTYPE),"Linux-cluster")
   else
    CC  = icpc
   endif
-  OPTIMIZE += -g -w -UONLY_CUDA -DENABLE_KEEP_ORIG -DENABLE_RENDER_SM -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS #-Ofast -march=native #-ipo#-march=core-avx2 -xCORE-AVX2 -mtune=core-avx2
+  OPTIMIZE += -g -w -UONLY_CUDA -DENABLE_KEEP_ORIG -DENABLE_RENDER_SM -UENABLE_RENDER_POS -DCUDA_FULL_ATOMICS -Ofast -march=native -ipo#-march=core-avx2 -xCORE-AVX2 -mtune=core-avx2
   OMP = -qopenmp #-lmpiP
   ifeq (CUDA,$(findstring CUDA,$(OPT)))
   CUDA_HOME = /usr/local/cuda-8.0
   NVCC = nvcc
   NVCCARCH = -arch=sm_61
-  NVCCFLAGS = -g -w -ccbin mpiicpc $(NVCCARCH) -dc -use_fast_math #-O3#-std=c++11
+  NVCCFLAGS = -g -w -ccbin mpiicpc $(NVCCARCH) -dc -use_fast_math -O3#-std=c++11
   LIB_OPT  =  -L$(CUDA_HOME)/lib64 -lcudart
   SUP_INCL += -I$(CUDA_HOME)/include
   endif

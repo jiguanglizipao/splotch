@@ -764,8 +764,8 @@ void sceneMaker::fetchFiles(vector<particle_sim> &particle_data, double fidx)
   //tstack_push("Copy");
     particle_data.resize(p_orig.size());
     //#pragma omp parallel for
-    //for (int i=0;i<p_orig.size();i++)particle_data[i]=p_orig[i];
-    memcpy(&particle_data[0], &p_orig[0], p_orig.size()*sizeof(particle_sim));
+    for (int i=0;i<p_orig.size();i++)particle_data[i]=p_orig[i];
+    //memcpy(&particle_data[0], &p_orig[0], p_orig.size()*sizeof(particle_sim));
     //particle_data=p_orig;
   //tstack_pop("Copy");
     return;
